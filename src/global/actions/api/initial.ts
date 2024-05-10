@@ -85,7 +85,7 @@ addActionHandler('initApi', async (global, actions): Promise<void> => {
       }
     }
 
-    console.log('localStorageData:', localStorageData);
+    // console.log('localStorageData:', localStorageData);
 
     // @ts-ignore;
     const userAuth = localStorageData?.userAuth;

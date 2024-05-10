@@ -82,10 +82,10 @@ export async function init(_onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) 
   // @ts-ignore;
   const { initConnectionParams, apiId, apiHash } = sessionData || {};
 
-  if (DEBUG) {
-    console.log('sessionData:', sessionData);
-    console.log('initialArgs:', initialArgs);
-  }
+  // if (DEBUG) {
+  //   console.log('sessionData:', sessionData);
+  //   console.log('initialArgs:', initialArgs);
+  // }
 
   client = new TelegramClient(
     session,
@@ -106,9 +106,9 @@ export async function init(_onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) 
     } as any,
   );
 
-  if (DEBUG) {
-    console.log('initConnectionParams:', initConnectionParams);
-  }
+  // if (DEBUG) {
+  //   console.log('initConnectionParams:', initConnectionParams);
+  // }
 
   client.initConnectionParams = initConnectionParams;
 

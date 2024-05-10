@@ -406,10 +406,10 @@ function makeRequest(message: OriginRequest) {
     }
   }
 
-  if (DEBUG) {
-    console.log('localStorageData:', localStorageData);
-    console.log('localStorage.length:', localStorage.length);
-  }
+  // if (DEBUG) {
+  //   console.log('localStorageData:', localStorageData);
+  //   console.log('localStorage.length:', localStorage.length);
+  // }
 
   worker?.postMessage({
     ...payload,
