@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 import LAYOUT_CAUSES from './layoutCauses';
 
 type Entities = keyof typeof LAYOUT_CAUSES;
@@ -153,6 +154,14 @@ function setupMutationObserver() {
           return;
         }
 
+        // @ts-ignore
+        if (window.__MICRO_APP_ENVIRONMENT__) {
+          // @ts-ignore
+          if (!document?.microAppElement?.contains?.(target)) {
+            return;
+          }
+        }
+
         if (forcedMutationAllowedFor.has(target)) {
           return;
         }
@@ -166,7 +175,7 @@ function setupMutationObserver() {
         }
 
         // eslint-disable-next-line no-console
-        onError(new Error(`Unexpected mutation detected: \`${type === 'attributes' ? attributeName : type}\``));
+        console.log(`Unexpected mutation detected: \`${type === 'attributes' ? attributeName : type}\``);
       });
     }
 

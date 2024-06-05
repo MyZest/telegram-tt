@@ -53,8 +53,8 @@ onmessage = ({ data }: OriginMessageEvent) => {
   data.payloads.forEach(async (payload) => {
     switch (payload.type) {
       case 'initApi': {
-        const { messageId, args } = payload;
-        await initApi(onUpdate, args[0], args[1]);
+        const { messageId, args, localStorageData = {} } = payload;
+        await initApi(onUpdate, { ...args[0], localStorageData }, args[1]);
         if (messageId) {
           sendToOrigin({
             type: 'methodResponse',

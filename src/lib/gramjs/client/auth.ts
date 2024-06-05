@@ -237,8 +237,8 @@ async function signInUserWithQrCode(
             }
 
             const result = await client.invoke(new Api.auth.ExportLoginToken({
-                apiId: Number(process.env.TELEGRAM_API_ID),
-                apiHash: process.env.TELEGRAM_API_HASH,
+                apiId: Number(client.apiId),
+                apiHash: client.apiHash,
                 exceptIds: [],
             }));
             if (!(result instanceof Api.auth.LoginToken)) {
@@ -278,8 +278,8 @@ async function signInUserWithQrCode(
 
     try {
         const result2 = await client.invoke(new Api.auth.ExportLoginToken({
-            apiId: Number(process.env.TELEGRAM_API_ID),
-            apiHash: process.env.TELEGRAM_API_HASH,
+            apiId: Number(client.apiId),
+            apiHash: client.apiHash,
             exceptIds: [],
         }));
 

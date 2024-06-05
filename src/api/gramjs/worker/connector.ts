@@ -65,10 +65,14 @@ function postMessageOnTickEnd(payload: OriginPayload) {
 
 export function initApiOnMasterTab(initialArgs: ApiInitialArgs) {
   if (!channel) return;
-
+  const token = getCurrentTabId();
+  if (DEBUG) {
+    console.log('initApi onmessage initApiOnMasterTab token:', token);
+    console.log('initApi onmessage initApiOnMasterTab initialArgs:', initialArgs);
+  }
   channel.postMessage({
     type: 'initApi',
-    token: getCurrentTabId(),
+    token,
     initialArgs,
   });
 }
@@ -99,6 +103,12 @@ export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
     if (initialArgs.platform === 'iOS') {
       setupIosHealthCheck();
     }
+  }
+
+  if (DEBUG) {
+    console.log('initApi connector makeRequest:', makeRequest);
+    console.log('initApi connector savedLocalDb:', savedLocalDb);
+    console.log('initApi connector initialArgs:', initialArgs);
   }
 
   return makeRequest({
@@ -409,7 +419,31 @@ function makeRequest(message: OriginPayload) {
       }
     });
 
+  const localStorageData = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    // @ts-ignore
+    const value = localStorage.getItem(key);
+    try {
+      // @ts-ignore
+      localStorageData[key] = JSON.parse(value);
+    } catch (error) {
+      // @ts-ignore
+      localStorageData[key] = value;
+    }
+  }
+
+  if (DEBUG) {
+    console.log('localStorageData:', localStorageData);
+    console.log('localStorage.length:', localStorage.length);
+  }
+
   postMessageOnTickEnd(payload);
+
+  // worker?.postMessage({
+  //   ...payload,
+  //   localStorageData,
+  // });
 
   return promise;
 }
