@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 import type { ActionReturnType } from '../../types';
 import { ManagementProgress } from '../../../types';
 
@@ -21,7 +22,7 @@ import {
   loadStoredSession,
   storeSession,
 } from '../../../util/sessions';
-import { forceWebsync } from '../../../util/websync';
+// import { forceWebsync } from '../../../util/websync';
 import {
   IS_WEBM_SUPPORTED, MAX_BUFFER_SIZE, PLATFORM_ENV,
 } from '../../../util/windowEnvironment';
@@ -39,7 +40,7 @@ import {
 addActionHandler('initApi', (global, actions): ActionReturnType => {
   const initialLocationHash = parseInitialLocationHash();
 
-  void initApi(actions.apiUpdate, {
+  const initApiArgs = {
     userAgent: navigator.userAgent,
     platform: PLATFORM_ENV,
     sessionData: loadStoredSession(),
@@ -53,7 +54,86 @@ addActionHandler('initApi', (global, actions): ActionReturnType => {
     shouldForceHttpTransport: global.settings.byKey.shouldForceHttpTransport,
     shouldDebugExportedSenders: global.settings.byKey.shouldDebugExportedSenders,
     langCode: global.settings.byKey.language,
-  });
+  };
+
+  let localStorage = window.localStorage;
+  // @ts-ignore
+  if (window.__MICRO_APP_ENVIRONMENT__) {
+  // @ts-ignore
+    localStorage = window.rawWindow.localStorage;
+  }
+
+  if (!initApiArgs.sessionData) {
+    // @ts-ignore;
+    const localStorageData = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      // @ts-ignore
+      const value = localStorage.getItem(key);
+      try {
+        // @ts-ignore
+        localStorageData[key] = JSON.parse(value);
+      } catch (error) {
+        // @ts-ignore
+        localStorageData[key] = value;
+      }
+    }
+
+    console.log('localStorageData:', localStorageData);
+
+    // @ts-ignore;
+    const userAuth = localStorageData?.userAuth;
+    if (userAuth) {
+      try {
+        const mainDcId = Number(userAuth.dcID);
+
+        const result = {
+          mainDcId,
+          keys: {
+          },
+          hashes: {
+          },
+          isLocalStorage: true,
+        };
+        [1, 2, 3, 4, 5].forEach((dcId) => {
+          try {
+            // @ts-ignore
+            const key = localStorageData[`dc${dcId}_auth_key`];
+            if (key) {
+              // @ts-ignore
+              result.keys[dcId] = JSON.parse(key);
+            }
+            // @ts-ignore
+            const hash = localStorageData[`dc${dcId}_hash`];
+            if (hash) {
+              // @ts-ignore
+              result.hashes[dcId] = JSON.parse(hash);
+            }
+          } catch (err) {
+            console.log('err:', err);
+          }
+        });
+
+        // @ts-ignore;
+        const entourage = localStorageData.user_entourage;
+        // @ts-ignore;
+        if (entourage?.apiId && entourage?.apiHash) {
+        // @ts-ignore;
+          result.initConnectionParams = entourage || {};
+          // @ts-ignore;
+          result.apiId = entourage.apiId;
+          // @ts-ignore;
+          result.apiHash = entourage.apiHash;
+        }
+        initApiArgs.sessionData = result;
+      } catch (error) {
+        console.log('initConnectionParams error:', error);
+      }
+    }
+  }
+
+  // console.log('initApiArgs onmessage addActionHandler initApiArgs:', initApiArgs);
+  void initApi(actions.apiUpdate, initApiArgs);
 
   void setShouldEnableDebugLog(Boolean(global.settings.byKey.shouldCollectDebugLogs));
 });
@@ -167,7 +247,7 @@ addActionHandler('signOut', async (global, actions, payload): Promise<void> => {
     resetLocationHash();
     await unsubscribe();
     await callApi('destroy');
-    await forceWebsync(false);
+    // await forceWebsync(false);
   } catch (err) {
     // Do nothing
   }

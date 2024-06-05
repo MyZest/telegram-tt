@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 import './util/handleError';
 import './util/setupServiceWorker';
 import './global/init';
@@ -107,3 +108,12 @@ onBeforeUnload(() => {
   actions.leaveGroupCall?.({ isPageUnload: true });
   actions.hangUp?.({ isPageUnload: true });
 });
+
+// @ts-ignore
+if (window.__MICRO_APP_ENVIRONMENT__) {
+  // @ts-ignore
+  window.unmount = () => {
+  // @ts-ignore
+    TeactDOM?.unmountComponentAtNode?.(document.getElementById('root'));
+  };
+}

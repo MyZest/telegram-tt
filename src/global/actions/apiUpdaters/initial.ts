@@ -16,7 +16,7 @@ import { unique } from '../../../util/iteratees';
 import { setLanguage } from '../../../util/langProvider';
 import { clearWebTokenAuth } from '../../../util/routing';
 import { setServerTimeOffset } from '../../../util/serverTime';
-import { forceWebsync } from '../../../util/websync';
+// import { forceWebsync } from '../../../util/websync';
 import { isChatChannel, isChatSuperGroup } from '../../helpers';
 import {
   addActionHandler, getGlobal, setGlobal,
@@ -117,7 +117,7 @@ function onUpdateAuthorizationState<T extends GlobalState>(global: T, update: Ap
 
   switch (authState) {
     case 'authorizationStateLoggingOut':
-      void forceWebsync(false);
+      // void forceWebsync(false);
 
       global = {
         ...global,
@@ -160,7 +160,7 @@ function onUpdateAuthorizationState<T extends GlobalState>(global: T, update: Ap
         break;
       }
 
-      void forceWebsync(true);
+      // void forceWebsync(true);
 
       global = {
         ...global,
@@ -223,10 +223,12 @@ function onUpdateConnectionState<T extends GlobalState>(
 
   if (global.isSynced) {
     const channelStackIds = Object.values(global.byTabId)
-      .flatMap((tab) => tab.messageLists)
-      .map((messageList) => messageList.chatId)
+    // @ts-ignore
+      .flatMap((tab = {}) => tab?.messageLists)
+    // @ts-ignore
+      .map((messageList = {}) => messageList?.chatId)
       .filter((chatId) => {
-        const chat = global.chats.byId[chatId];
+        const chat = global?.chats?.byId?.[chatId];
         return chat && (isChatChannel(chat) || isChatSuperGroup(chat));
       });
     if (connectionState === 'connectionStateReady' && channelStackIds.length) {

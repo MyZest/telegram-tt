@@ -337,7 +337,7 @@ function reduceUsers<T extends GlobalState>(global: T): GlobalState['users'] {
   ).map(({ chatId }) => chatId).filter((chatId) => isUserId(chatId));
 
   const visibleUserIds = unique(compact(Object.values(global.byTabId)
-    .flatMap(({ id: tabId }) => selectVisibleUsers(global, tabId)?.map((u) => u.id) || [])));
+    .flatMap(({ id: tabId }) => selectVisibleUsers(global, tabId)?.map((u) => u?.id) || [])));
 
   const chatStoriesUserIds = currentChatIds
     .flatMap((chatId) => Object.values(selectChatMessages(global, chatId) || {}))
@@ -380,10 +380,10 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
     const messageList = selectCurrentMessageList(global, tabId);
     if (!messageList) return undefined;
 
-    const messages = selectChatMessages(global, messageList.chatId);
+    const messages = selectChatMessages(global, messageList.chatId) || {};
     const viewportIds = selectViewportIds(global, messageList.chatId, messageList.threadId, tabId);
     return viewportIds?.map((id) => {
-      const message = messages[id];
+      const message = messages?.[id];
       if (!message) return undefined;
       const content = message.content;
       const replyPeer = message.replyInfo?.type === 'message' && message.replyInfo.replyToPeerId;

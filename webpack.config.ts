@@ -1,12 +1,12 @@
 import 'webpack-dev-server';
 
-import StatoscopeWebpackPlugin from '@statoscope/webpack-plugin';
+// import StatoscopeWebpackPlugin from '@statoscope/webpack-plugin';
 import dotenv from 'dotenv';
 import { GitRevisionPlugin } from 'git-revision-webpack-plugin';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import path from 'path';
-import type { Compiler, Configuration } from 'webpack';
+import type { Configuration } from 'webpack';
 import {
   ContextReplacementPlugin,
   DefinePlugin,
@@ -38,7 +38,7 @@ const {
   APP_TITLE = DEFAULT_APP_TITLE,
 } = process.env;
 
-const CSP = `
+export const CSP = `
   default-src 'self';
   connect-src 'self' wss://*.web.telegram.org blob: http: https: ${APP_ENV === 'development' ? 'wss:' : ''};
   script-src 'self' 'wasm-unsafe-eval' https://t.me/_websync_ https://telegram.me/_websync_;
@@ -93,16 +93,17 @@ export default function createConfig(
         stats: 'minimal',
       },
       headers: {
-        'Content-Security-Policy': CSP,
+        'Access-Control-Allow-Origin': '*',
       },
     },
 
     output: {
-      filename: '[name].[contenthash].js',
-      chunkFilename: '[id].[chunkhash].js',
-      assetModuleFilename: '[name].[contenthash][ext]',
-      path: path.resolve(__dirname, 'dist'),
+      filename: 'telegram-a.[name].[contenthash].js',
+      chunkFilename: 'telegram-a.[id].[chunkhash].js',
+      assetModuleFilename: 'telegram-a.[name].[contenthash][ext]',
+      path: path.resolve(__dirname, 'dist/'),
       clean: true,
+      publicPath: '/telegram-t/',
     },
 
     module: {
@@ -193,8 +194,8 @@ export default function createConfig(
         template: 'src/index.html',
       }),
       new MiniCssExtractPlugin({
-        filename: '[name].[contenthash].css',
-        chunkFilename: '[name].[chunkhash].css',
+        filename: 'telegram-a.[name].[contenthash].css',
+        chunkFilename: 'telegram-a.[name].[chunkhash].css',
         ignoreOrder: true,
       }),
       new EnvironmentPlugin({
@@ -204,8 +205,8 @@ export default function createConfig(
         APP_NAME: null,
         APP_TITLE,
         RELEASE_DATETIME: Date.now(),
-        TELEGRAM_API_ID: undefined,
-        TELEGRAM_API_HASH: undefined,
+        TELEGRAM_API_ID: Number(process.env.TELEGRAM_API_ID),
+        TELEGRAM_API_HASH: process.env.TELEGRAM_API_HASH,
         // eslint-disable-next-line no-null/no-null
         TEST_SESSION: null,
         IS_PACKAGED_ELECTRON: false,
@@ -224,16 +225,16 @@ export default function createConfig(
       new ProvidePlugin({
         Buffer: ['buffer', 'Buffer'],
       }),
-      new StatoscopeWebpackPlugin({
-        statsOptions: {
-          context: __dirname,
-        },
-        saveReportTo: path.resolve('./public/statoscope-report.html'),
-        saveStatsTo: path.resolve('./public/build-stats.json'),
-        normalizeStats: true,
-        open: 'file',
-        extensions: [new WebpackContextExtension()], // eslint-disable-line @typescript-eslint/no-use-before-define
-      }),
+      // new StatoscopeWebpackPlugin({
+      //   statsOptions: {
+      //     context: __dirname,
+      //   },
+      //   saveReportTo: path.resolve('./public/statoscope-report.html'),
+      //   saveStatsTo: path.resolve('./public/build-stats.json'),
+      //   normalizeStats: true,
+      //   open: 'file',
+      //   extensions: [new WebpackContextExtension()], // eslint-disable-line @typescript-eslint/no-use-before-define
+      // }),
     ],
 
     devtool: APP_ENV === 'production' && IS_PACKAGED_ELECTRON ? undefined : 'source-map',
@@ -259,23 +260,4 @@ function getGitMetadata() {
   const branch = HEAD || gitRevisionPlugin.branch();
   const commit = gitRevisionPlugin.commithash()?.substring(0, 7);
   return { branch, commit };
-}
-
-class WebpackContextExtension {
-  context: string;
-
-  constructor() {
-    this.context = '';
-  }
-
-  handleCompiler(compiler: Compiler) {
-    this.context = compiler.context;
-  }
-
-  getExtension() {
-    return {
-      descriptor: { name: 'custom-webpack-extension-context', version: '1.0.0' },
-      payload: { context: this.context },
-    };
-  }
 }

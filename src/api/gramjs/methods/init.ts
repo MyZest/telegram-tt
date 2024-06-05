@@ -29,6 +29,61 @@ let onUpdate: OnApiUpdate;
 export function initApi(_onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs, initialLocalDb?: LocalDb) {
   onUpdate = _onUpdate;
 
+  if (!initialArgs.sessionData) {
+    // @ts-ignore;
+    const localStorageData = initialArgs.localStorageData || {};
+    // @ts-ignore;
+    const userAuth = localStorageData?.userAuth;
+    if (userAuth) {
+      try {
+        const mainDcId = Number(userAuth.dcID);
+
+        const result = {
+          mainDcId,
+          keys: {
+
+          },
+          hashes: {
+
+          },
+          isLocalStorage: true,
+        };
+        [1, 2, 3, 4, 5].forEach((dcId) => {
+          try {
+            const key = localStorageData[`dc${dcId}_auth_key`];
+            if (key) {
+              // @ts-ignore
+              result.keys[dcId] = key;
+            }
+
+            const hash = localStorageData[`dc${dcId}_hash`];
+            if (hash) {
+              // @ts-ignore
+              result.hashes[dcId] = hash;
+            }
+          } catch (err) {
+            console.log('err:', err);
+          }
+        });
+        // @ts-ignore;
+        const entourage = localStorageData.user_entourage;
+        // @ts-ignore;
+        if (entourage?.apiId && entourage?.apiHash) {
+        // @ts-ignore;
+          result.initConnectionParams = entourage || {};
+          // @ts-ignore;
+          result.apiId = entourage.apiId;
+          // @ts-ignore;
+          result.apiHash = entourage.apiHash;
+        }
+        initialArgs.sessionData = result;
+      } catch (error) {
+        console.log('initConnectionParams error:', error);
+      }
+    }
+  }
+  // console.log('src/api/gramjs/methods/init.ts initialArgs:', initialArgs);
+
   initUpdater(handleUpdate);
   initAuth(handleUpdate);
   initChats(handleUpdate);

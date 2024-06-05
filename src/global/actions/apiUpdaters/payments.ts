@@ -3,7 +3,7 @@ import type { ActionReturnType } from '../../types';
 import { areDeepEqual } from '../../../util/areDeepEqual';
 import { formatCurrency } from '../../../util/formatCurrency';
 import * as langProvider from '../../../util/langProvider';
-import { IS_PRODUCTION_HOST } from '../../../util/windowEnvironment';
+// import { IS_PRODUCTION_HOST } from '../../../util/windowEnvironment';
 import { addActionHandler, setGlobal } from '../../index';
 import { closeInvoice } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
@@ -53,9 +53,9 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         // On the production host, the payment frame receives a message with the payment event,
         // after which the payment form closes. In other cases, the payment form must be closed manually.
         // Closing the invoice will cause the closing of the Payment Modal dialog and then closing the payment.
-        if (!IS_PRODUCTION_HOST) {
-          global = closeInvoice(global, tabId);
-        }
+        // if (!IS_PRODUCTION_HOST) {
+        //   global = closeInvoice(global, tabId);
+        // }
 
         if (update.slug && inputInvoice && 'slug' in inputInvoice && inputInvoice.slug !== update.slug) {
           return;

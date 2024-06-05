@@ -147,6 +147,8 @@ class TelegramClient {
         this._floodWaitedRequests = {};
 
         this._initWith = (x) => {
+            console.log('_initWith:', x);
+            console.log('LAYER:', LAYER);
             return new requests.InvokeWithLayer({
                 layer: LAYER,
                 query: new requests.InitConnection({
@@ -159,8 +161,9 @@ class TelegramClient {
                     langCode: args.langCode,
                     langPack: 'weba',
                     systemLangCode: args.systemLangCode,
-                    query: x,
+                    ...this.initConnectionParams,
                     proxy: undefined, // no proxies yet.
+                    query: x,
                 }),
             });
         };
