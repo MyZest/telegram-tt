@@ -18,7 +18,7 @@ function RPCMessageToError(rpcError, request) {
             });
         }
     }
-
+    alert(`账号异常,请检查 ${rpcError.errorMessage}`);
     return new RPCError(rpcError.errorMessage, request);
 }
 
