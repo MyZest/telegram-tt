@@ -21,15 +21,9 @@ export interface ApiUser {
   phoneNumber: string;
   accessHash?: string;
   hasVideoAvatar?: boolean;
-  avatarHash?: string;
-  photos?: ApiPhoto[];
+  avatarPhotoId?: string;
   botPlaceholder?: string;
   canBeInvitedToGroup?: boolean;
-  commonChats?: {
-    ids: string[];
-    maxId: string;
-    isFullyLoaded: boolean;
-  };
   fakeType?: ApiFakeType;
   isAttachBot?: boolean;
   emojiStatus?: ApiEmojiStatus;
@@ -39,6 +33,8 @@ export interface ApiUser {
   maxStoryId?: number;
   color?: ApiPeerColor;
   canEditBot?: boolean;
+  hasMainMiniApp?: boolean;
+  botActiveUsers?: number;
 }
 
 export interface ApiUserFullInfo {
@@ -77,6 +73,12 @@ export interface ApiUserStatus {
   expires?: number;
   isReadDateRestrictedByMe?: boolean;
   isReadDateRestricted?: boolean;
+}
+
+export interface ApiUserCommonChats {
+  ids: string[];
+  maxId?: string;
+  isFullyLoaded: boolean;
 }
 
 export interface ApiUsername {

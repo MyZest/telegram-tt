@@ -1,3 +1,4 @@
+import type { ApiReactionEmoji } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
 import { ApiMediaFormat } from '../../../api/types';
 
@@ -6,8 +7,8 @@ import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import {
   buildCollectionByCallback, buildCollectionByKey, omit, unique,
 } from '../../../util/iteratees';
+import { getMessageKey } from '../../../util/keys/messageKey';
 import * as mediaLoader from '../../../util/mediaLoader';
-import { getMessageKey } from '../../../util/messageKey';
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { callApi } from '../../../api/gramjs';
 import {
@@ -19,7 +20,7 @@ import {
 } from '../../helpers';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
-  addChatMessagesById, addChats, addUsers, updateChat, updateChatMessage,
+  addChatMessagesById, updateChat, updateChatMessage,
 } from '../../reducers';
 import { addMessageReaction, subtractXForEmojiInteraction, updateUnreadReactions } from '../../reducers/reactions';
 import { updateTabState } from '../../reducers/tabs';
@@ -57,7 +58,7 @@ addActionHandler('loadAvailableReactions', async (global): Promise<void> => {
       mediaLoader.fetch(`sticker${availableReaction.appearAnimation.id}`, ApiMediaFormat.BlobUrl);
     }
     if (availableReaction.selectAnimation) {
-      mediaLoader.fetch(getDocumentMediaHash(availableReaction.selectAnimation), ApiMediaFormat.BlobUrl);
+      mediaLoader.fetch(getDocumentMediaHash(availableReaction.selectAnimation, 'full')!, ApiMediaFormat.BlobUrl);
     }
   });
 
@@ -75,6 +76,45 @@ addActionHandler('loadAvailableReactions', async (global): Promise<void> => {
     action: 'loadAvailableReactions',
     payload: undefined,
   }, GENERAL_REFETCH_INTERVAL);
+});
+
+addActionHandler('loadAvailableEffects', async (global): Promise<void> => {
+  const result = await callApi('fetchAvailableEffects');
+  if (!result) {
+    return;
+  }
+
+  const { effects, emojis, stickers } = result;
+  const reactions:ApiReactionEmoji[] = [];
+
+  const effectById = buildCollectionByKey(effects, 'id');
+
+  for (const effect of effects) {
+    if (effect.effectAnimationId) {
+      const reaction: ApiReactionEmoji = {
+        emoticon: effect.emoticon,
+      };
+      reactions.push(reaction);
+    }
+  }
+
+  global = getGlobal();
+  global = {
+    ...global,
+    availableEffectById: effectById,
+    stickers: {
+      ...global.stickers,
+      effect: {
+        stickers,
+        emojis,
+      },
+    },
+    reactions: {
+      ...global.reactions,
+      effectReactions: reactions,
+    },
+  };
+  setGlobal(global);
 });
 
 addActionHandler('interactWithAnimatedEmoji', (global, actions, payload): ActionReturnType => {
@@ -296,10 +336,6 @@ addActionHandler('loadReactors', async (global, actions, payload): Promise<void>
   }
 
   global = getGlobal();
-
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
-
   global = updateChatMessage(global, chatId, messageId, {
     reactors: result,
   });
@@ -369,17 +405,15 @@ addActionHandler('fetchUnreadReactions', async (global, actions, payload): Promi
     return;
   }
 
-  const { messages, chats, users } = result;
+  const { messages } = result;
 
   const byId = buildCollectionByKey(messages, 'id');
   const ids = Object.keys(byId).map(Number);
 
   global = getGlobal();
   global = addChatMessagesById(global, chat.id, byId);
-  global = addUsers(global, buildCollectionByKey(users, 'id'));
-  global = addChats(global, buildCollectionByKey(chats, 'id'));
   global = updateUnreadReactions(global, chatId, {
-    unreadReactions: unique([...(chat.unreadReactions || []), ...ids]),
+    unreadReactions: unique([...(chat.unreadReactions || []), ...ids]).sort((a, b) => b - a),
   });
 
   setGlobal(global);
@@ -391,15 +425,21 @@ addActionHandler('animateUnreadReaction', (global, actions, payload): ActionRetu
   const chat = selectCurrentChat(global, tabId);
   if (!chat) return undefined;
 
-  if (chat.unreadReactionsCount) {
-    const unreadReactions = (chat.unreadReactions || []).filter((id) => !messageIds.includes(id));
-
-    global = updateUnreadReactions(global, chat.id, {
-      unreadReactions,
+  if (!chat.unreadReactionsCount) {
+    return updateUnreadReactions(global, chat.id, {
+      unreadReactions: [],
     });
-
-    setGlobal(global);
   }
+
+  const unreadReactionsCount = Math.max(chat.unreadReactionsCount - messageIds.length, 0);
+  const unreadReactions = (chat.unreadReactions || []).filter((id) => !messageIds.includes(id));
+
+  global = updateUnreadReactions(global, chat.id, {
+    unreadReactions,
+    unreadReactionsCount,
+  });
+
+  setGlobal(global);
 
   actions.markMessagesRead({ messageIds, shouldFetchUnreadReactions: true, tabId });
 
@@ -407,27 +447,18 @@ addActionHandler('animateUnreadReaction', (global, actions, payload): ActionRetu
 
   global = getGlobal();
 
-  return updateTabState(global, {
-    activeReactions: {
-      ...selectTabState(global, tabId).activeReactions,
-      ...Object.fromEntries(messageIds.map((messageId) => {
-        const message = selectChatMessage(global, chat.id, messageId);
+  messageIds.forEach((id) => {
+    const message = selectChatMessage(global, chat.id, id);
+    if (!message) return;
 
-        if (!message) return undefined;
+    const { reaction, isOwn, isUnread } = message.reactions?.recentReactions?.[0] ?? {};
+    if (reaction && isUnread && !isOwn) {
+      const messageKey = getMessageKey(message);
+      actions.startActiveReaction({ containerId: messageKey, reaction, tabId: getCurrentTabId() });
+    }
+  });
 
-        const unread = message.reactions?.recentReactions?.filter(({ isUnread }) => isUnread);
-
-        if (!unread) return undefined;
-
-        const reactions = unread.map((recent) => recent.reaction);
-
-        return [messageId, reactions.map((r) => ({
-          messageId,
-          reaction: r,
-        }))];
-      }).filter(Boolean)),
-    },
-  }, tabId);
+  return undefined;
 });
 
 addActionHandler('focusNextReaction', (global, actions, payload): ActionReturnType => {
@@ -443,14 +474,10 @@ addActionHandler('focusNextReaction', (global, actions, payload): ActionReturnTy
     return undefined;
   }
 
-  actions.focusMessage({ chatId: chat.id, messageId: chat.unreadReactions[0], tabId });
+  actions.focusMessage({
+    chatId: chat.id, messageId: chat.unreadReactions[0], tabId, scrollTargetPosition: 'end',
+  });
   actions.markMessagesRead({ messageIds: [chat.unreadReactions[0]], tabId });
-  if (chat && chat?.unreadReactionsCount && chat.unreadReactionsCount > 0) {
-    return updateUnreadReactions(global, chat.id, {
-      unreadReactionsCount: chat.unreadReactionsCount - 1,
-      unreadReactions: chat.unreadReactions.slice(1) || [],
-    });
-  }
   return undefined;
 });
 

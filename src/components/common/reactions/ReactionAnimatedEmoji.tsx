@@ -16,7 +16,7 @@ import useFlag from '../../../hooks/useFlag';
 import { useIsIntersecting } from '../../../hooks/useIntersectionObserver';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMedia from '../../../hooks/useMedia';
-import useShowTransition from '../../../hooks/useShowTransition';
+import useShowTransitionDeprecated from '../../../hooks/useShowTransitionDeprecated';
 import useCustomEmoji from '../hooks/useCustomEmoji';
 
 import AnimatedSticker from '../AnimatedSticker';
@@ -125,11 +125,11 @@ const ReactionAnimatedEmoji = ({
   const {
     shouldRender: shouldRenderEffect,
     transitionClassNames: animationClassNames,
-  } = useShowTransition(shouldPlayEffect, undefined, true, 'slow');
+  } = useShowTransitionDeprecated(shouldPlayEffect, undefined, true, 'slow');
   const {
     shouldRender: shouldRenderCenter,
     transitionClassNames: centerAnimationClassNames,
-  } = useShowTransition(shouldPlayCenter, undefined, true, 'slow');
+  } = useShowTransitionDeprecated(shouldPlayCenter, undefined, true, 'slow');
 
   const handleEnded = useLastCallback(() => {
     stopActiveReaction({ containerId, reaction });
@@ -140,7 +140,7 @@ const ReactionAnimatedEmoji = ({
   const {
     shouldRender: shouldRenderStatic,
     transitionClassNames: staticClassNames,
-  } = useShowTransition(shouldShowStatic, undefined, true);
+  } = useShowTransitionDeprecated(shouldShowStatic, undefined, true);
 
   const rootClassName = buildClassName(
     styles.root,
@@ -166,8 +166,8 @@ const ReactionAnimatedEmoji = ({
           className={styles.customEmoji}
           size={size}
           noPlay={shouldPause}
+          noVideoOnMobile
           loopLimit={loopLimit}
-          forceAlways
           observeIntersectionForPlaying={observeIntersection}
         />
       )}
@@ -179,7 +179,6 @@ const ReactionAnimatedEmoji = ({
           tgsUrl={mediaDataCenterIcon}
           play={isIntersecting && !shouldPause}
           noLoop={!shouldLoop}
-          forceAlways
           onLoad={markAnimationLoaded}
           onEnded={unmarkAnimationLoaded}
         />
@@ -193,7 +192,6 @@ const ReactionAnimatedEmoji = ({
             tgsUrl={mediaDataEffect}
             play={isIntersecting}
             noLoop
-            forceAlways
             onEnded={handleEnded}
           />
           {isCustom && !assignedEffectId && isIntersecting && (

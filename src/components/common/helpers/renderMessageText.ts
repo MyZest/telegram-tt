@@ -1,16 +1,18 @@
-import type { ApiMessage } from '../../../api/types';
-import type { LangFn } from '../../../hooks/useLang';
+import type { ApiMessage, ApiSponsoredMessage } from '../../../api/types';
+import type { LangFn } from '../../../hooks/useOldLang';
 import type { TextPart } from '../../../types';
 import { ApiMessageEntityTypes } from '../../../api/types';
 
 import {
+  getMessageText,
+} from '../../../global/helpers';
+import {
   getMessageSummaryDescription,
   getMessageSummaryEmoji,
   getMessageSummaryText,
-  getMessageText,
   TRUNCATED_SUMMARY_LENGTH,
-} from '../../../global/helpers';
-import { getMessageKey } from '../../../util/messageKey';
+} from '../../../global/helpers/messageSummary';
+import { getMessageKey } from '../../../util/keys/messageKey';
 import trimText from '../../../util/trimText';
 import renderText from './renderText';
 import { renderTextWithEntities } from './renderTextWithEntities';
@@ -26,7 +28,7 @@ export function renderMessageText({
   shouldRenderAsHtml,
   isForMediaViewer,
 } : {
-  message: ApiMessage;
+  message: ApiMessage | ApiSponsoredMessage;
   highlight?: string;
   emojiSize?: number;
   isSimple?: boolean;

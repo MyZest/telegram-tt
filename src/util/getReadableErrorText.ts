@@ -20,6 +20,7 @@ const READABLE_ERROR_MESSAGES: Record<string, string> = {
   MEDIA_NEW_INVALID: 'Failed to replace new media',
   MESSAGE_NOT_MODIFIED: 'Message not modified. The new content is identical to the current one.',
   MEDIA_INVALID: 'Media invalid',
+  PASSWORD_HASH_INVALID: 'Incorrect password',
   PHOTO_EXT_INVALID: 'The extension of the photo is invalid',
   PHOTO_INVALID_DIMENSIONS: 'The photo dimensions are invalid',
   PHOTO_SAVE_FILE_INVALID: 'Internal issues, try again later',
@@ -74,6 +75,8 @@ const READABLE_ERROR_MESSAGES: Record<string, string> = {
   BOT_PRECHECKOUT_TIMEOUT: 'The request for payment has expired',
 
   PEERS_LIST_EMPTY: 'No chats are added to the list',
+
+  PAID_MEDIA_FORBIDDEN: 'You can\'t send paid media in this chat',
 };
 
 if (DEBUG) {

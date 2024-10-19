@@ -100,7 +100,8 @@ const InfiniteScroll: FC<OwnProps> = ({
 
   // Initial preload
   useEffect(() => {
-    if (!loadMoreBackwards) {
+    const container = containerRef.current;
+    if (!loadMoreBackwards || !container) {
       return;
     }
 
@@ -109,8 +110,8 @@ const InfiniteScroll: FC<OwnProps> = ({
       return;
     }
 
-    const { scrollHeight, clientHeight } = containerRef.current!;
-    if (clientHeight && scrollHeight <= clientHeight) {
+    const { scrollHeight, clientHeight } = container;
+    if (clientHeight && scrollHeight < clientHeight) {
       loadMoreBackwards();
     }
   }, [items, loadMoreBackwards, preloadBackwards]);

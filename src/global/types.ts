@@ -2,9 +2,12 @@ import type {
   ApiAppConfig,
   ApiAttachBot,
   ApiAttachment,
+  ApiAvailableEffect,
   ApiAvailableReaction,
   ApiBoost,
   ApiBoostsStatus,
+  ApiBotPreviewMedia,
+  ApiChannelMonetizationStatistics,
   ApiChannelStatistics,
   ApiChat,
   ApiChatAdminRights,
@@ -33,6 +36,7 @@ import type {
   ApiInviteInfo,
   ApiInvoice,
   ApiKeyboardButton,
+  ApiMediaFormat,
   ApiMessage,
   ApiMessageEntity,
   ApiMissingInvitedUser,
@@ -43,23 +47,25 @@ import type {
   ApiPaymentFormNativeParams,
   ApiPaymentSavedInfo,
   ApiPeerColors,
+  ApiPeerPhotos,
   ApiPeerStories,
   ApiPhoneCall,
   ApiPhoto,
   ApiPostStatistics,
   ApiPremiumGiftCodeOption,
   ApiPremiumPromo,
-  ApiPrepaidGiveaway,
   ApiQuickReply,
   ApiReaction,
   ApiReactionKey,
-  ApiReceipt,
+  ApiReceiptRegular,
   ApiReportReason,
   ApiSavedReactionTag,
   ApiSendMessageAction,
   ApiSession,
   ApiSessionData,
-  ApiSponsoredMessage,
+  ApiSponsoredMessage, ApiStarGiveawayOption,
+  ApiStarsTransaction,
+  ApiStarTopupOption,
   ApiStealthMode,
   ApiSticker,
   ApiStickerSet,
@@ -67,13 +73,16 @@ import type {
   ApiThemeParameters,
   ApiThreadInfo,
   ApiTimezone,
+  ApiTopic,
   ApiTranscription,
+  ApiTypePrepaidGiveaway,
   ApiTypeStoryView,
   ApiTypingStatus,
   ApiUpdate,
   ApiUpdateAuthorizationStateType,
   ApiUpdateConnectionStateType,
   ApiUser,
+  ApiUserCommonChats,
   ApiUserFullInfo,
   ApiUserStatus,
   ApiVideo,
@@ -92,9 +101,11 @@ import type {
   ApiPrivacySettings,
   AudioOrigin,
   ChatCreationProgress,
+  ChatMediaSearchParams,
   EmojiKeywords,
   FocusDirection,
   GlobalSearchContent,
+  IAlbum,
   IAnchorPosition,
   InlineBotSettings,
   ISettings,
@@ -104,7 +115,9 @@ import type {
   ManagementProgress,
   ManagementScreens,
   ManagementState,
+  MediaViewerMedia,
   MediaViewerOrigin,
+  MiddleSearchParams,
   NewChatMembersProgress,
   NotifyException,
   PaymentStep,
@@ -112,6 +125,7 @@ import type {
   PrivacyVisibility,
   ProfileEditProgress,
   ProfileTabType,
+  ScrollTargetPosition,
   SettingsScreens,
   SharedMediaType,
   ShippingOption,
@@ -119,6 +133,9 @@ import type {
   ThemeKey,
   ThreadId,
 } from '../types';
+import type { WebAppOutboundEvent } from '../types/webapp';
+import type { SearchResultKey } from '../util/keys/searchResultKey';
+import type { DownloadableMedia } from './helpers';
 
 export type MessageListType =
   'thread'
@@ -126,6 +143,8 @@ export type MessageListType =
   | 'scheduled';
 
 export type ChatListType = 'active' | 'archived' | 'saved';
+
+export type WebAppModalStateType = 'maximized' | 'minimized';
 
 export interface MessageList {
   chatId: string;
@@ -143,12 +162,26 @@ export interface ActiveEmojiInteraction {
   isReversed?: boolean;
 }
 
+export type ActiveDownloads = Record<string, {
+  format: ApiMediaFormat;
+  filename: string;
+  size: number;
+  originChatId?: string;
+  originMessageId?: number;
+}>;
+
 export type IDimensions = {
   width: number;
   height: number;
 };
 
 export type ApiPaymentStatus = 'paid' | 'failed' | 'pending' | 'cancelled';
+
+export type StarsTransactionType = 'all' | 'inbound' | 'outbound';
+export type StarsTransactionHistory = Record<StarsTransactionType, {
+  transactions: ApiStarsTransaction[];
+  nextOffset?: string;
+} | undefined>;
 
 export type ConfettiStyle = 'poppers' | 'top-down';
 
@@ -182,6 +215,13 @@ export interface ServiceNotification {
   version?: string;
   isUnread?: boolean;
   isDeleted?: boolean;
+}
+
+export interface TopicsInfo {
+  totalCount: number;
+  topicsById: Record<ThreadId, ApiTopic>;
+  listedTopicIds?: number[];
+  orderedPinnedTopicIds?: number[];
 }
 
 export type ApiLimitType =
@@ -224,11 +264,22 @@ export type ChatRequestedTranslations = {
   manualMessages?: Record<number, string>;
 };
 
+type ConfettiParams = OptionalCombine<{
+  style?: ConfettiStyle;
+  withStars?: boolean;
+}, {
+  top?: number;
+  left?: number;
+  width?: number;
+  height?: number;
+}>;
+
 export type TabState = {
   id: number;
   isBlurred?: boolean;
   isMasterTab: boolean;
   isInactive?: boolean;
+  shouldPreventComposerAnimation?: boolean;
   inviteHash?: string;
   canInstall?: boolean;
   isChatInfoShown: boolean;
@@ -276,6 +327,7 @@ export type TabState = {
     isSilent?: boolean;
     sendGrouped?: boolean;
     sendCompressed?: boolean;
+    isInvertedMedia?: true;
   };
 
   activeChatFolder: number;
@@ -290,6 +342,7 @@ export type TabState = {
     noHighlight?: boolean;
     isResizingContainer?: boolean;
     quote?: string;
+    scrollTargetPosition?: ScrollTargetPosition;
   };
 
   selectedMessages?: {
@@ -319,7 +372,10 @@ export type TabState = {
     storyId?: number;
     position?: IAnchorPosition;
     sendAsMessage?: boolean;
+    isForEffects?: boolean;
   };
+
+  shouldPlayEffectInComposer?: true;
 
   inlineBots: {
     isLoading: boolean;
@@ -328,27 +384,33 @@ export type TabState = {
 
   globalSearch: {
     query?: string;
-    date?: number;
+    minDate?: number;
+    maxDate?: number;
     currentContent?: GlobalSearchContent;
     chatId?: string;
     foundTopicIds?: number[];
     fetchingStatus?: {
       chats?: boolean;
       messages?: boolean;
+      botApps?: boolean;
     };
     isClosing?: boolean;
     localResults?: {
-      chatIds?: string[];
-      userIds?: string[];
+      peerIds?: string[];
     };
     globalResults?: {
-      chatIds?: string[];
-      userIds?: string[];
+      peerIds?: string[];
+    };
+    popularBotApps?: {
+      peerIds: string[];
+      nextOffset?: string;
     };
     resultsByType?: Partial<Record<ApiGlobalMessageSearchType, {
       totalCount?: number;
-      nextOffsetId: number;
-      foundIds: string[];
+      nextOffsetId?: number;
+      nextOffsetPeerId?: string;
+      nextOffsetRate?: number;
+      foundIds: SearchResultKey[];
     }>>;
   };
 
@@ -362,19 +424,11 @@ export type TabState = {
   activeEmojiInteractions?: ActiveEmojiInteraction[];
   activeReactions: Record<string, ApiReaction[]>;
 
-  localTextSearch: {
-    byChatThreadKey: Record<string, {
-      query?: string;
-      savedTag?: ApiReaction;
-      results?: {
-        totalCount?: number;
-        nextOffsetId?: number;
-        foundIds?: number[];
-      };
-    }>;
+  middleSearch: {
+    byChatThreadKey: Record<string, MiddleSearchParams | undefined>;
   };
 
-  localMediaSearch: {
+  sharedMediaSearch: {
     byChatThreadKey: Record<string, {
       currentType?: SharedMediaType;
       resultsByType?: Partial<Record<SharedMediaType, {
@@ -383,6 +437,10 @@ export type TabState = {
         foundIds: number[];
       }>>;
     }>;
+  };
+
+  chatMediaSearch: {
+    byChatThreadKey: Record<string, ChatMediaSearchParams>;
   };
 
   management: {
@@ -422,9 +480,12 @@ export type TabState = {
   mediaViewer: {
     chatId?: string;
     threadId?: ThreadId;
-    mediaId?: number;
-    avatarOwnerId?: string;
-    profilePhotoIndex?: number;
+    messageId?: number;
+    withDynamicLoading?: boolean;
+    mediaIndex?: number;
+    isAvatarView?: boolean;
+    isSponsoredMessage?: boolean;
+    standaloneMedia?: MediaViewerMedia[];
     origin?: MediaViewerOrigin;
     volume: number;
     playbackRate: number;
@@ -450,8 +511,17 @@ export type TabState = {
     loadingMessageId: number;
   };
 
+  isShareMessageModalShown?: boolean;
+
+  replyingMessage: {
+    fromChatId?: string;
+    messageId?: number;
+    quoteText?: ApiFormattedText;
+    toChatId?: string;
+    toThreadId?: ThreadId;
+  };
+
   forwardMessages: {
-    isModalShown?: boolean;
     fromChatId?: string;
     messageIds?: number[];
     storyId?: number;
@@ -470,6 +540,7 @@ export type TabState = {
   };
 
   payment: {
+    type?: 'regular' | 'stars';
     inputInvoice?: ApiInputInvoice;
     step?: PaymentStep;
     status?: ApiPaymentStatus;
@@ -493,7 +564,7 @@ export type TabState = {
     };
     passwordMissing?: boolean;
     savedCredentials?: ApiPaymentCredentials[];
-    receipt?: ApiReceipt;
+    receipt?: ApiReceiptRegular;
     error?: {
       field?: string;
       message?: string;
@@ -507,7 +578,7 @@ export type TabState = {
       validUntil: number;
     };
     url?: string;
-    botName?: string;
+    botId?: string;
   };
 
   chatCreation?: {
@@ -547,14 +618,7 @@ export type TabState = {
     }[];
   };
 
-  activeDownloads: {
-    byChatId: {
-      [chatId: string]: {
-        ids?: number[];
-        scheduledIds?: number[];
-      };
-    };
-  };
+  activeDownloads: ActiveDownloads;
 
   statistics: {
     byChatId: Record<string, ApiChannelStatistics | ApiGroupStatistics>;
@@ -562,6 +626,7 @@ export type TabState = {
     currentMessageId?: number;
     currentStory?: ApiPostStatistics;
     currentStoryId?: number;
+    monetization?: ApiChannelMonetizationStatistics;
   };
 
   newContact?: {
@@ -587,14 +652,13 @@ export type TabState = {
     isQuiz?: boolean;
   };
 
-  webApp?: {
-    url: string;
-    botId: string;
-    buttonText: string;
-    queryId?: string;
-    slug?: string;
-    replyInfo?: ApiInputMessageReplyInfo;
-    canSendMessages?: boolean;
+  webApps: {
+    activeWebApp?: WebApp;
+    openedOrderedKeys: string[];
+    sessionKeys: string[];
+    openedWebApps: Record<string, WebApp>;
+    modalState : WebAppModalStateType;
+    isModalOpen: boolean;
   };
 
   botTrustRequest?: {
@@ -620,6 +684,7 @@ export type TabState = {
     width?: number;
     height?: number;
     style?: ConfettiStyle;
+    withStars?: boolean;
   };
 
   urlAuth?: {
@@ -653,18 +718,42 @@ export type TabState = {
     gifts?: ApiPremiumGiftCodeOption[];
     selectedMemberIds?: string[];
     selectedChannelIds?: string[];
-    prepaidGiveaway?: ApiPrepaidGiveaway;
+    prepaidGiveaway?: ApiTypePrepaidGiveaway;
+    starOptions?: ApiStarGiveawayOption[];
+  };
+
+  deleteMessageModal?: {
+    message?: ApiMessage;
+    isSchedule?: boolean;
+    album?: IAlbum;
+    onConfirm?: NoneToVoidFunction;
   };
 
   giftingModal?: {
     isOpen?: boolean;
   };
 
-  giftPremiumModal?: {
+  starsGiftingModal?: {
+    isOpen?: boolean;
+  };
+
+  starsGiftModal?: {
+    isCompleted?: boolean;
+    isOpen?: boolean;
+    forUserId?: string;
+    starsGiftOptions?: ApiStarTopupOption[];
+  };
+
+  starsTransactionModal?: {
+    transaction: ApiStarsTransaction;
+  };
+
+  giftModal?: {
     isCompleted?: boolean;
     isOpen?: boolean;
     forUserIds?: string[];
     gifts?: ApiPremiumGiftCodeOption[];
+    starsGiftOptions?: ApiStarTopupOption[];
   };
 
   limitReachedModal?: {
@@ -722,6 +811,10 @@ export type TabState = {
     };
   };
 
+  monetizationStatistics?: {
+    chatId: string;
+  };
+
   giftCodeModal?: {
     slug: string;
     message?: {
@@ -745,9 +838,15 @@ export type TabState = {
     type: 'phone' | 'username';
     collectible: string;
   };
+
+  starsBalanceModal?: {
+    originPayment?: TabState['payment'];
+  };
+  isStarPaymentModalOpen?: true;
 };
 
 export type GlobalState = {
+  isInited: boolean;
   config?: ApiConfig;
   appConfig?: ApiAppConfig;
   peerColors?: ApiPeerColors;
@@ -788,9 +887,15 @@ export type GlobalState = {
     waitingEmailCodeLength?: number;
   };
 
+  monetizationInfo: {
+    isLoading?: boolean;
+    error?: string;
+  };
+
   attachmentSettings: {
     shouldCompress: boolean;
     shouldSendGrouped: boolean;
+    isInvertedMedia?: true;
   };
 
   attachMenu: {
@@ -842,7 +947,10 @@ export type GlobalState = {
     statusesById: Record<string, ApiUserStatus>;
     // Obtained from GetFullUser / UserFullInfo
     fullInfoById: Record<string, ApiUserFullInfo>;
+    previewMediaByBotId: Record<string, ApiBotPreviewMedia[]>;
+    commonChatsById: Record<string, ApiUserCommonChats>;
   };
+  profilePhotosById: Record<string, ApiPeerPhotos>;
 
   chats: {
     // TODO Replace with `Partial<Record>` to properly handle missing keys
@@ -871,6 +979,12 @@ export type GlobalState = {
       all?: Record<string, number>;
       saved?: Record<string, number>;
     };
+    topicsInfoById: Record<string, TopicsInfo>;
+    loadingParameters: Record<ChatListType, {
+      nextOffsetId?: number;
+      nextOffsetPeerId?: string;
+      nextOffsetDate?: number;
+    }>;
     forDiscussionIds?: string[];
     // Obtained from GetFullChat / GetFullChannel
     fullInfoById: Record<string, ApiChatFullInfo>;
@@ -943,6 +1057,7 @@ export type GlobalState = {
     topReactions: ApiReaction[];
     recentReactions: ApiReaction[];
     defaultTags: ApiReaction[];
+    effectReactions: ApiReaction[];
     availableReactions?: ApiAvailableReaction[];
     hash: {
       topReactions?: string;
@@ -950,6 +1065,7 @@ export type GlobalState = {
       defaultTags?: string;
     };
   };
+  availableEffectById: Record<string, ApiAvailableEffect>;
 
   stickers: {
     setsById: Record<string, ApiStickerSet>;
@@ -981,6 +1097,10 @@ export type GlobalState = {
       emoji?: string;
       stickers?: ApiSticker[];
       hash?: string;
+    };
+    effect: {
+      stickers: ApiSticker[];
+      emojis: ApiSticker[];
     };
   };
 
@@ -1024,6 +1144,11 @@ export type GlobalState = {
   };
 
   topInlineBots: {
+    userIds?: string[];
+    lastRequestedAt?: number;
+  };
+
+  topBotApps: {
     userIds?: string[];
     lastRequestedAt?: number;
   };
@@ -1074,6 +1199,12 @@ export type GlobalState = {
     byKey: Record<ApiReactionKey, ApiSavedReactionTag>;
     hash: string;
   };
+
+  stars?: {
+    topupOptions: ApiStarTopupOption[];
+    balance: number;
+    history: StarsTransactionHistory;
+  };
 };
 
 export type CallSound = (
@@ -1096,7 +1227,32 @@ export type ApiDraft = {
   text?: ApiFormattedText;
   replyInfo?: ApiInputMessageReplyInfo;
   date?: number;
+  effectId?: string;
   isLocal?: boolean;
+};
+
+export type WebApp = {
+  url: string;
+  requestUrl?: string;
+  botId: string;
+  appName?: string;
+  buttonText: string;
+  peerId?: string;
+  queryId?: string;
+  slug?: string;
+  replyInfo?: ApiInputMessageReplyInfo;
+  canSendMessages?: boolean;
+  isRemoveModalOpen?: boolean;
+  isCloseModalOpen?: boolean;
+  shouldConfirmClosing?: boolean;
+  headerColor?: string;
+  serverHeaderColor?: string;
+  serverHeaderColorKey?: 'bg_color' | 'secondary_bg_color';
+  backgroundColor?: string;
+  isBackButtonVisible?: boolean;
+  isSettingsButtonVisible?: boolean;
+  sendEvent?: (event: WebAppOutboundEvent) => void;
+  reloadFrame?: (url: string) => void;
 };
 
 type WithTabId = { tabId?: number };
@@ -1176,6 +1332,7 @@ export interface ActionPayloads {
   updatePerformanceSettings: Partial<PerformanceType>;
   loadPasswordInfo: undefined;
   clearTwoFaError: undefined;
+  clearMonetizationInfo: undefined;
   updatePassword: {
     currentPassword: string;
     password: string;
@@ -1270,20 +1427,34 @@ export interface ActionPayloads {
     userIds: string[];
   };
 
-  // message search
-  openLocalTextSearch: WithTabId | undefined;
-  closeLocalTextSearch: WithTabId | undefined;
-  setLocalTextSearchQuery: {
+  // Message search
+  openMiddleSearch: WithTabId | undefined;
+  closeMiddleSearch: WithTabId | undefined;
+  updateMiddleSearch: {
+    chatId: string;
+    threadId?: ThreadId;
+    update: Partial<Omit<MiddleSearchParams, 'results'>>;
+  } & WithTabId;
+  resetMiddleSearch: WithTabId | undefined;
+  performMiddleSearch: {
+    chatId: string;
+    threadId?: ThreadId;
     query?: string;
   } & WithTabId;
-  setLocalTextSearchTag: {
-    tag: ApiReaction | undefined;
+  searchHashtag: {
+    hashtag: string;
   } & WithTabId;
-  setLocalMediaSearchType: {
+  setSharedMediaSearchType: {
     mediaType: SharedMediaType;
   } & WithTabId;
-  searchTextMessagesLocal: WithTabId | undefined;
-  searchMediaMessagesLocal: WithTabId | undefined;
+  searchSharedMediaMessages: WithTabId | undefined;
+  searchChatMediaMessages: {
+    currentMediaMessageId: number;
+    direction?: LoadMoreDirection;
+    chatId?: string;
+    threadId? : ThreadId;
+    limit?: number;
+  } & WithTabId;
   searchMessagesByDate: {
     timestamp: number;
   } & WithTabId;
@@ -1301,7 +1472,7 @@ export interface ActionPayloads {
   deleteChatMember: {
     chatId: string;
     userId: string;
-  } & WithTabId;
+  };
   openPreviousChat: WithTabId | undefined;
   editChatFolders: {
     chatId: string;
@@ -1315,8 +1486,7 @@ export interface ActionPayloads {
   preloadTopChatMessages: undefined;
   loadAllChats: {
     listType: ChatListType;
-    onReplace?: VoidFunction;
-    shouldReplace?: boolean;
+    onFirstBatchDone?: VoidFunction;
   };
   openChatWithInfo: ActionPayloads['openChat'] & {
     profileTab?: ProfileTabType;
@@ -1378,6 +1548,7 @@ export interface ActionPayloads {
   searchMessagesGlobal: {
     type: ApiGlobalMessageSearchType;
   } & WithTabId;
+  searchPopularBotApps: WithTabId | undefined;
   addRecentlyFoundChatId: {
     id: string;
   };
@@ -1430,6 +1601,8 @@ export interface ActionPayloads {
     shouldGroupMessages?: boolean;
     messageList?: MessageList;
     isReaction?: true; // Reaction to the story are sent in the form of a message
+    isInvertedMedia?: true;
+    effectId?: string;
   } & WithTabId;
   sendInviteMessages: {
     chatId: string;
@@ -1486,6 +1659,8 @@ export interface ActionPayloads {
   };
   clickSponsoredMessage: {
     chatId: string;
+    isMedia?: boolean;
+    isFullscreen?: boolean;
   };
   reportSponsoredMessage: {
     chatId: string;
@@ -1639,11 +1814,24 @@ export interface ActionPayloads {
     savedCredentialId?: string;
     tipAmount?: number;
   } & WithTabId;
+  sendStarPaymentForm: WithTabId | undefined;
   getReceipt: {
-    receiptMessageId: number;
     chatId: string;
     messageId: number;
   } & WithTabId;
+  openStarsTransactionModal: {
+    transaction: ApiStarsTransaction;
+  } & WithTabId;
+  openStarsTransactionFromGift: {
+    chatId: string;
+    messageId: number;
+  } & WithTabId;
+  closeStarsTransactionModal: WithTabId | undefined;
+  openPrizeStarsTransactionFromGiveaway: {
+    chatId: string;
+    messageId: number;
+  } & WithTabId;
+  closePrizeStarsTransactionFromGiveaway: WithTabId | undefined;
   sendCredentialsInfo: {
     credentials: ApiCredentials;
   } & WithTabId;
@@ -1687,6 +1875,15 @@ export interface ActionPayloads {
     token: string;
     name: string;
     isPercentage?: boolean;
+  } & WithTabId;
+  loadChannelMonetizationStatistics: {
+    chatId: string;
+  } & WithTabId;
+
+  loadMonetizationRevenueWithdrawalUrl: {
+    chatId: string;
+    currentPassword: string;
+    onSuccess: VoidFunction;
   } & WithTabId;
 
   // ui
@@ -1857,12 +2054,12 @@ export interface ActionPayloads {
     shouldReplaceHistory?: boolean;
     noForumTopicPanel?: boolean;
     quote?: string;
+    scrollTargetPosition?: ScrollTargetPosition;
   } & WithTabId;
 
   focusLastMessage: WithTabId | undefined;
   updateDraftReplyInfo: Partial<ApiInputMessageReplyInfo> & WithTabId;
   resetDraftReplyInfo: WithTabId | undefined;
-  closeWebApp: WithTabId | undefined;
 
   // Multitab
   destroyConnection: undefined;
@@ -1957,7 +2154,8 @@ export interface ActionPayloads {
   };
   toggleSignatures: {
     chatId: string;
-    isEnabled: boolean;
+    areSignaturesEnabled: boolean;
+    areProfilesEnabled: boolean;
   };
   loadGroupsForDiscussion: undefined;
   linkDiscussionGroup: {
@@ -1966,7 +2164,7 @@ export interface ActionPayloads {
   } & WithTabId;
   unlinkDiscussionGroup: {
     channelId: string;
-  } & WithTabId;
+  };
 
   openSavedDialog: {
     chatId: string;
@@ -2011,15 +2209,15 @@ export interface ActionPayloads {
     chatId: string;
     withPhotos?: boolean;
     force?: boolean;
-  } & WithTabId;
+  };
   updateChatPhoto: {
     chatId: string;
     photo: ApiPhoto;
-  } & WithTabId;
+  };
   deleteChatPhoto: {
     chatId: string;
     photo: ApiPhoto;
-  } & WithTabId;
+  };
   openChatWithDraft: {
     chatId?: string;
     threadId?: ThreadId;
@@ -2073,6 +2271,31 @@ export interface ActionPayloads {
       amount: number;
     };
   } & WithTabId;
+
+  launchPrepaidStarsGiveaway: {
+    chatId: string;
+    giveawayId: string;
+    paymentPurpose: {
+      additionalChannelIds?: string[];
+      areWinnersVisible?: boolean;
+      countries?: string[];
+      prizeDescription?: string;
+      untilDate: number;
+      currency: string;
+      stars: number;
+      users: number;
+      amount: number;
+    };
+  } & WithTabId;
+
+  loadStarStatus: undefined;
+  loadStarsTransactions: {
+    type: StarsTransactionType;
+  };
+  openStarsBalanceModal: {
+    originPayment?: TabState['payment'];
+  } & WithTabId;
+  closeStarsBalanceModal: WithTabId | undefined;
 
   checkChatlistInvite: {
     slug: string;
@@ -2135,6 +2358,10 @@ export interface ActionPayloads {
     chatId: string;
     ids: number[];
     shouldIncrement?: boolean;
+  };
+  loadFactChecks: {
+    chatId: string;
+    ids: number[];
   };
   loadOutboxReadDate: {
     chatId: string;
@@ -2238,7 +2465,8 @@ export interface ActionPayloads {
   setChatEnabledReactions: {
     chatId: string;
     enabledReactions?: ApiChatReactions;
-  } & WithTabId;
+    reactionsLimit?: number;
+  };
 
   startActiveReaction: {
     containerId: string;
@@ -2249,6 +2477,10 @@ export interface ActionPayloads {
     reaction?: ApiReaction;
   } & WithTabId;
 
+  openEffectPicker: {
+    chatId: string;
+    position: IAnchorPosition;
+  } & WithTabId;
   openMessageReactionPicker: {
     chatId: string;
     messageId: number;
@@ -2402,17 +2634,22 @@ export interface ActionPayloads {
     chatId: string;
   } & WithTabId;
 
+  openMonetizationStatistics: {
+    chatId: string;
+  } & WithTabId;
+  closeMonetizationStatistics: WithTabId | undefined;
+
   // Media Viewer & Audio Player
   openMediaViewer: {
     chatId?: string;
     threadId?: ThreadId;
-    mediaId?: number;
-    avatarOwnerId?: string;
-    profilePhotoIndex?: number;
+    messageId?: number;
+    standaloneMedia?: MediaViewerMedia[];
+    mediaIndex?: number;
+    isAvatarView?: boolean;
+    isSponsoredMessage?: boolean;
     origin: MediaViewerOrigin;
-    volume?: number;
-    playbackRate?: number;
-    isMuted?: boolean;
+    withDynamicLoading?: boolean;
   } & WithTabId;
   closeMediaViewer: WithTabId | undefined;
   setMediaViewerVolume: {
@@ -2453,14 +2690,15 @@ export interface ActionPayloads {
 
   // Downloads
   downloadSelectedMessages: WithTabId | undefined;
-  downloadMessageMedia: {
-    message: ApiMessage;
+  downloadMedia: {
+    media: DownloadableMedia;
+    originMessage?: ApiMessage;
   } & WithTabId;
-  cancelMessageMediaDownload: {
-    message: ApiMessage;
+  cancelMediaDownload: {
+    media: DownloadableMedia;
   } & WithTabId;
-  cancelMessagesMediaDownload: {
-    messages: ApiMessage[];
+  cancelMediaHashDownloads: {
+    mediaHashes: string[];
   } & WithTabId;
 
   // Users
@@ -2499,7 +2737,9 @@ export interface ActionPayloads {
   deleteContact: { userId: string };
   loadUser: { userId: string };
   setUserSearchQuery: { query?: string } & WithTabId;
-  loadCommonChats: WithTabId | undefined;
+  loadCommonChats: {
+    userId: string;
+  };
   reportSpam: { chatId: string };
   loadFullUser: { userId: string; withPhotos?: boolean };
   openAddContactDialog: { userId?: string } & WithTabId;
@@ -2517,8 +2757,10 @@ export interface ActionPayloads {
     isMuted?: boolean;
     shouldSharePhoneNumber?: boolean;
   } & WithTabId;
-  loadProfilePhotos: {
-    profileId: string;
+  loadMoreProfilePhotos: {
+    peerId: string;
+    isPreload?: boolean;
+    shouldInvalidateCache?: boolean;
   };
   deleteProfilePhoto: {
     photo: ApiPhoto;
@@ -2527,6 +2769,17 @@ export interface ActionPayloads {
     photo: ApiPhoto;
     isFallback?: boolean;
   };
+  // Composer
+  setShouldPreventComposerAnimation: {
+    shouldPreventComposerAnimation: boolean;
+  } & WithTabId;
+
+  // Replies
+  openReplyMenu: {
+    fromChatId: string;
+    messageId?: number;
+    quoteText?: ApiFormattedText;
+  } & WithTabId;
 
   // Forwards
   openForwardMenu: {
@@ -2568,11 +2821,13 @@ export interface ActionPayloads {
   // Stickers
   loadStickers: {
     stickerSetInfo: ApiStickerSetInfo;
-  } & WithTabId;
+  };
   loadAnimatedEmojis: undefined;
   loadGreetingStickers: undefined;
   loadGenericEmojiEffects: undefined;
   loadBirthdayNumbersStickers: undefined;
+
+  loadAvailableEffects: undefined;
 
   addRecentSticker: {
     sticker: ApiSticker;
@@ -2585,7 +2840,7 @@ export interface ActionPayloads {
   clearRecentStickers: undefined;
 
   loadStickerSets: undefined;
-  loadAddedStickers: WithTabId | undefined;
+  loadAddedStickers: undefined;
   loadRecentStickers: undefined;
   loadFavoriteStickers: undefined;
   loadFeaturedStickers: undefined;
@@ -2641,6 +2896,7 @@ export interface ActionPayloads {
     chatId?: string;
   } & WithTabId;
   loadTopInlineBots: undefined;
+  loadTopBotApps: undefined;
   queryInlineBot: {
     chatId: string;
     username: string;
@@ -2671,6 +2927,7 @@ export interface ActionPayloads {
   };
 
   clickBotInlineButton: {
+    chatId: string;
     messageId: number;
     button: ApiKeyboardButton;
   } & WithTabId;
@@ -2700,6 +2957,16 @@ export interface ActionPayloads {
     isFromBotMenu?: boolean;
     startParam?: string;
   } & WithTabId;
+  updateWebApp: {
+    webApp: Partial<WebApp>;
+  } & WithTabId;
+  requestMainWebView: {
+    botId: string;
+    peerId: string;
+    theme?: ApiThemeParameters;
+    startParam?: string;
+    shouldMarkBotTrusted?: boolean;
+  } & WithTabId;
   prolongWebView: {
     botId: string;
     peerId: string;
@@ -2724,7 +2991,14 @@ export interface ActionPayloads {
     startApp?: string;
     isWriteAllowed?: boolean;
     isFromConfirm?: boolean;
+    shouldSkipBotTrustRequest?: boolean;
   } & WithTabId;
+  openWebAppTab: {
+    webApp?: WebApp;
+  } & WithTabId;
+  loadPreviewMedias: {
+    botId: string;
+  };
   setWebAppPaymentSlug: {
     slug?: string;
   } & WithTabId;
@@ -2820,29 +3094,49 @@ export interface ActionPayloads {
     chatId: string;
     username: string;
     isActive: boolean;
-  } & WithTabId;
+  };
   sortChatUsernames: {
     chatId: string;
     usernames: string[];
   };
+  closeActiveWebApp: WithTabId | undefined;
+  closeWebApp: {
+    webApp: WebApp;
+    skipClosingConfirmation?: boolean;
+  } & WithTabId;
+  closeWebAppModal: WithTabId | undefined;
+  changeWebAppModalState: WithTabId | undefined;
 
   // Misc
+  refreshLangPackFromCache: {
+    langCode: string;
+  };
   openPollModal: ({
     isQuiz?: boolean;
   } & WithTabId) | undefined;
   closePollModal: WithTabId | undefined;
-  requestConfetti: ({
-    top: number;
-    left: number;
-    width: number;
-    height: number;
-    style?: ConfettiStyle;
-  } & WithTabId) | WithTabId;
+  requestConfetti: (ConfettiParams & WithTabId) | WithTabId;
 
   updateAttachmentSettings: {
     shouldCompress?: boolean;
     shouldSendGrouped?: boolean;
+    isInvertedMedia?: true;
   };
+
+  saveEffectInDraft: {
+    chatId: string;
+    threadId: ThreadId;
+    effectId?: string;
+  };
+
+  setReactionEffect: {
+    chatId: string;
+    threadId: ThreadId;
+    reaction?: ApiReaction;
+  } & WithTabId;
+
+  requestEffectInComposer: WithTabId;
+  hideEffectInComposer: WithTabId;
 
   updateArchiveSettings: {
     isMinimized?: boolean;
@@ -2852,6 +3146,7 @@ export interface ActionPayloads {
   openUrl: {
     url: string;
     shouldSkipModal?: boolean;
+    ignoreDeepLinks?: boolean;
   } & WithTabId;
   openMapModal: {
     geoPoint: ApiGeoPoint;
@@ -2958,7 +3253,6 @@ export interface ActionPayloads {
   setPasscode: { passcode: string } & WithTabId;
   clearPasscode: undefined;
   lockScreen: undefined;
-  decryptSession: { passcode: string };
   unlockScreen: { sessionJson: string; globalJson: string };
   softSignIn: undefined;
   logInvalidUnlockAttempt: undefined;
@@ -3017,12 +3311,23 @@ export interface ActionPayloads {
   openGiveawayModal: ({
     chatId: string;
     gifts?: number[] | undefined;
-    prepaidGiveaway?: ApiPrepaidGiveaway | undefined;
+    prepaidGiveaway?: ApiTypePrepaidGiveaway | undefined;
   } & WithTabId);
   closeGiveawayModal: WithTabId | undefined;
 
   openPremiumGiftingModal: WithTabId | undefined;
   closePremiumGiftingModal: WithTabId | undefined;
+
+  openStarsGiftingModal: WithTabId | undefined;
+  closeStarsGiftingModal: WithTabId | undefined;
+
+  openDeleteMessageModal: ({
+    message?: ApiMessage;
+    isSchedule?: boolean;
+    album?: IAlbum;
+    onConfirm?: NoneToVoidFunction;
+  } & WithTabId);
+  closeDeleteMessageModal: WithTabId | undefined;
 
   transcribeAudio: {
     chatId: string;
@@ -3033,12 +3338,19 @@ export interface ActionPayloads {
   loadDefaultTopicIcons: undefined;
   loadPremiumStickers: undefined;
 
-  openGiftPremiumModal: ({
+  openPremiumGiftModal: ({
     chatId?: string;
     forMultipleUsers?: boolean;
     forUserIds?: string[];
+    isStarsGifting?: boolean;
   } & WithTabId) | undefined;
-  closeGiftPremiumModal: WithTabId | undefined;
+  closePremiumGiftModal: WithTabId | undefined;
+
+  openStarsGiftModal: ({
+    chatId?: string;
+    forUserId?: string;
+  } & WithTabId) | undefined;
+  closeStarsGiftModal: WithTabId | undefined;
 
   setEmojiStatus: {
     emojiStatus: ApiSticker;

@@ -22,9 +22,9 @@ import { updateSizes } from '../util/windowSize';
 
 import useAppLayout from '../hooks/useAppLayout';
 import useFlag from '../hooks/useFlag';
-import usePrevious from '../hooks/usePrevious';
+import usePreviousDeprecated from '../hooks/usePreviousDeprecated';
 
-// import Test from './test/TestSvg';
+// import Test from './test/TestLocale';
 import Auth from './auth/Auth';
 import UiLoader from './common/UiLoader';
 import AppInactive from './main/AppInactive';
@@ -193,7 +193,7 @@ const App: FC<StateProps> = ({
     }
   }, [isInactiveAuth, markInactive, unmarkInactive]);
 
-  const prevActiveKey = usePrevious(activeKey);
+  const prevActiveKey = usePreviousDeprecated(activeKey);
 
   // eslint-disable-next-line consistent-return
   function renderContent() {

@@ -11,7 +11,6 @@ import type { IconName } from '../../../types/icons';
 
 import { CONTENT_NOT_SUPPORTED } from '../../../config';
 import {
-  getMediaContentTypeDescription,
   getMessageIsSpoiler,
   getMessageMediaHash,
   getMessageRoundVideo,
@@ -22,6 +21,7 @@ import {
   isMessageTranslatable,
   isUserId,
 } from '../../../global/helpers';
+import { getMediaContentTypeDescription } from '../../../global/helpers/messageSummary';
 import buildClassName from '../../../util/buildClassName';
 import freezeWhenClosed from '../../../util/hoc/freezeWhenClosed';
 import { getPictogramDimensions } from '../helpers/mediaDimensions';
@@ -31,13 +31,14 @@ import { renderTextWithEntities } from '../helpers/renderTextWithEntities';
 
 import { useFastClick } from '../../../hooks/useFastClick';
 import { useIsIntersecting } from '../../../hooks/useIntersectionObserver';
-import useLang from '../../../hooks/useLang';
 import useMedia from '../../../hooks/useMedia';
+import useOldLang from '../../../hooks/useOldLang';
 import useThumbnail from '../../../hooks/useThumbnail';
 import useMessageTranslation from '../../middle/message/hooks/useMessageTranslation';
 
 import ActionMessage from '../../middle/ActionMessage';
-import Icon from '../Icon';
+import RippleEffect from '../../ui/RippleEffect';
+import Icon from '../icons/Icon';
 import MediaSpoiler from '../MediaSpoiler';
 import MessageSummary from '../MessageSummary';
 import EmojiIconBackground from './EmojiIconBackground';
@@ -89,16 +90,20 @@ const EmbeddedMessage: FC<OwnProps> = ({
   const ref = useRef<HTMLDivElement>(null);
   const isIntersecting = useIsIntersecting(ref, observeIntersectionForLoading);
 
-  const wrappedMedia = useMemo(() => {
-    const replyMedia = replyInfo?.type === 'message' && replyInfo.replyMedia;
-    if (!replyMedia) return undefined;
-    return {
-      content: replyMedia,
-    };
-  }, [replyInfo]);
+  const containedMedia: MediaContainer | undefined = useMemo(() => {
+    const media = (replyInfo?.type === 'message' && replyInfo.replyMedia) || message?.content;
+    if (!media) {
+      return undefined;
+    }
 
-  const mediaBlobUrl = useMedia(message && getMessageMediaHash(message, 'pictogram'), !isIntersecting);
-  const mediaThumbnail = useThumbnail(message || wrappedMedia);
+    return {
+      content: media,
+    };
+  }, [message, replyInfo]);
+
+  const mediaHash = containedMedia && getMessageMediaHash(containedMedia, 'pictogram');
+  const mediaBlobUrl = useMedia(mediaHash, !isIntersecting);
+  const mediaThumbnail = useThumbnail(containedMedia);
   const isRoundVideo = Boolean(message && getMessageRoundVideo(message));
   const isSpoiler = Boolean(message && getMessageIsSpoiler(message));
   const isQuote = Boolean(replyInfo?.type === 'message' && replyInfo.isQuote);
@@ -109,7 +114,7 @@ const EmbeddedMessage: FC<OwnProps> = ({
     chatTranslations, message?.chatId, shouldTranslate ? message?.id : undefined, requestedChatTranslationLanguage,
   );
 
-  const lang = useLang();
+  const lang = useOldLang();
 
   const senderTitle = sender ? getSenderTitle(lang, sender)
     : (replyForwardInfo?.hiddenUserName || message?.forwardInfo?.hiddenUserName);
@@ -131,7 +136,7 @@ const EmbeddedMessage: FC<OwnProps> = ({
     }
 
     if (!message) {
-      return customText || renderMediaContentType(wrappedMedia) || NBSP;
+      return customText || renderMediaContentType(containedMedia) || NBSP;
     }
 
     if (isActionMessage(message)) {
@@ -147,7 +152,6 @@ const EmbeddedMessage: FC<OwnProps> = ({
 
     return (
       <MessageSummary
-        lang={lang}
         message={message}
         noEmoji={Boolean(mediaThumbnail)}
         translatedText={translatedText}
@@ -228,6 +232,8 @@ const EmbeddedMessage: FC<OwnProps> = ({
       onClick={handleClick}
       onMouseDown={handleMouseDown}
     >
+      <div className="hover-effect" />
+      <RippleEffect />
       {mediaThumbnail && renderPictogram(mediaThumbnail, mediaBlobUrl, isRoundVideo, isProtected, isSpoiler)}
       {sender?.color?.backgroundEmojiId && (
         <EmojiIconBackground

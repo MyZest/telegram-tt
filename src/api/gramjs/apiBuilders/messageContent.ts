@@ -10,8 +10,9 @@ import type {
   ApiGiveawayResults,
   ApiInvoice,
   ApiLocation,
-  ApiMessageExtendedMediaPreview,
+  ApiMediaExtendedPreview,
   ApiMessageStoryData,
+  ApiPaidMedia,
   ApiPhoto,
   ApiPoll,
   ApiSticker,
@@ -21,14 +22,18 @@ import type {
   ApiWebPage,
   ApiWebPageStickerData,
   ApiWebPageStoryData,
+  BoughtPaidMedia,
   MediaContent,
 } from '../../types';
 import type { UniversalMessage } from './messages';
 
-import { SUPPORTED_IMAGE_CONTENT_TYPES, SUPPORTED_VIDEO_CONTENT_TYPES, VIDEO_WEBM_TYPE } from '../../../config';
+import { SUPPORTED_PHOTO_CONTENT_TYPES, SUPPORTED_VIDEO_CONTENT_TYPES, VIDEO_WEBM_TYPE } from '../../../config';
 import { pick } from '../../../util/iteratees';
-import { addStoryToLocalDb, serializeBytes } from '../helpers';
 import {
+  addMediaToLocalDb, addStoryToLocalDb, type MediaRepairContext, serializeBytes,
+} from '../helpers';
+import {
+  buildApiFormattedText,
   buildApiMessageEntity,
   buildApiPhoto,
   buildApiPhotoSize,
@@ -44,8 +49,9 @@ export function buildMessageContent(
   let content: MediaContent = {};
 
   if (mtpMessage.media) {
+    const repairContext = 'peerId' in mtpMessage ? mtpMessage : undefined;
     content = {
-      ...buildMessageMediaContent(mtpMessage.media),
+      ...buildMessageMediaContent(mtpMessage.media, repairContext),
     };
   }
 
@@ -72,7 +78,11 @@ export function buildMessageTextContent(
   };
 }
 
-export function buildMessageMediaContent(media: GramJs.TypeMessageMedia): MediaContent | undefined {
+export function buildMessageMediaContent(
+  media: GramJs.TypeMessageMedia, context?: MediaRepairContext,
+): MediaContent | undefined {
+  addMediaToLocalDb(media, context);
+
   const ttlSeconds = 'ttlSeconds' in media ? media.ttlSeconds : undefined;
 
   const isExpiredVoice = isExpiredVoiceMessage(media);
@@ -97,8 +107,8 @@ export function buildMessageMediaContent(media: GramJs.TypeMessageMedia): MediaC
     return undefined;
   }
 
-  if ('extendedMedia' in media && media.extendedMedia instanceof GramJs.MessageExtendedMedia) {
-    return buildMessageMediaContent(media.extendedMedia.media);
+  if (media instanceof GramJs.MessageMediaInvoice && media.extendedMedia instanceof GramJs.MessageExtendedMedia) {
+    return buildMessageMediaContent(media.extendedMedia.media, context);
   }
 
   const sticker = buildSticker(media);
@@ -144,6 +154,9 @@ export function buildMessageMediaContent(media: GramJs.TypeMessageMedia): MediaC
   const giveawayResults = buildGiweawayResultsFromMedia(media);
   if (giveawayResults) return { giveawayResults };
 
+  const paidMedia = buildPaidMedia(media);
+  if (paidMedia) return { paidMedia };
+
   return undefined;
 }
 
@@ -173,7 +186,7 @@ export function buildVideoFromDocument(document: GramJs.Document, isSpoiler?: bo
   }
 
   const {
-    id, mimeType, thumbs, size, attributes,
+    id, mimeType, thumbs, size, videoThumbs, attributes,
   } = document;
 
   // eslint-disable-next-line no-restricted-globals
@@ -182,14 +195,16 @@ export function buildVideoFromDocument(document: GramJs.Document, isSpoiler?: bo
   }
 
   const videoAttr = attributes
-    .find((a: any): a is GramJs.DocumentAttributeVideo => a instanceof GramJs.DocumentAttributeVideo);
+    .find((a): a is GramJs.DocumentAttributeVideo => a instanceof GramJs.DocumentAttributeVideo);
 
   if (!videoAttr) {
     return undefined;
   }
 
   const gifAttr = attributes
-    .find((a: any): a is GramJs.DocumentAttributeAnimated => a instanceof GramJs.DocumentAttributeAnimated);
+    .find((a): a is GramJs.DocumentAttributeAnimated => a instanceof GramJs.DocumentAttributeAnimated);
+
+  const hasVideoPreview = videoThumbs?.some((thumb) => thumb instanceof GramJs.VideoSize && thumb.type === 'v');
 
   const {
     duration,
@@ -201,6 +216,7 @@ export function buildVideoFromDocument(document: GramJs.Document, isSpoiler?: bo
   } = videoAttr;
 
   return {
+    mediaType: 'video',
     id: String(id),
     mimeType,
     duration,
@@ -213,6 +229,7 @@ export function buildVideoFromDocument(document: GramJs.Document, isSpoiler?: bo
     thumbnail: buildApiThumbnailFromStripped(thumbs),
     size: size.toJSNumber(),
     isSpoiler,
+    hasVideoPreview,
     ...(nosound && { noSound: true }),
   };
 }
@@ -240,6 +257,7 @@ export function buildAudioFromDocument(document: GramJs.Document): ApiAudio | un
   } = audioAttributes;
 
   return {
+    mediaType: 'audio',
     id: String(id),
     mimeType,
     duration,
@@ -297,6 +315,7 @@ function buildAudio(media: GramJs.TypeMessageMedia): ApiAudio | undefined {
     .map((thumb) => buildApiPhotoSize(thumb));
 
   return {
+    mediaType: 'audio',
     id: String(media.document.id),
     fileName: getFilenameFromDocument(media.document, 'audio'),
     thumbnailSizes,
@@ -341,7 +360,9 @@ function buildVoice(media: GramJs.TypeMessageMedia): ApiVoice | undefined {
   const { duration, waveform } = audioAttribute;
 
   return {
+    mediaType: 'voice',
     id: String(media.document.id),
+    size: media.document.size.toJSNumber(),
     duration,
     waveform: waveform ? Array.from(waveform) : undefined,
   };
@@ -373,7 +394,7 @@ export function buildApiDocument(document: GramJs.TypeDocument): ApiDocument | u
     }
   }
 
-  let mediaType: ApiDocument['mediaType'] | undefined;
+  let innerMediaType: ApiDocument['innerMediaType'] | undefined;
   let mediaSize: ApiDocument['mediaSize'] | undefined;
   if (photoSize) {
     mediaSize = {
@@ -381,8 +402,8 @@ export function buildApiDocument(document: GramJs.TypeDocument): ApiDocument | u
       height: photoSize.h,
     };
 
-    if (SUPPORTED_IMAGE_CONTENT_TYPES.has(mimeType)) {
-      mediaType = 'photo';
+    if (SUPPORTED_PHOTO_CONTENT_TYPES.has(mimeType)) {
+      innerMediaType = 'photo';
 
       const imageAttribute = attributes
         .find((a: any): a is GramJs.DocumentAttributeImageSize => a instanceof GramJs.DocumentAttributeImageSize);
@@ -395,7 +416,7 @@ export function buildApiDocument(document: GramJs.TypeDocument): ApiDocument | u
         };
       }
     } else if (SUPPORTED_VIDEO_CONTENT_TYPES.has(mimeType)) {
-      mediaType = 'video';
+      innerMediaType = 'video';
       const videoAttribute = attributes
         .find((a: any): a is GramJs.DocumentAttributeVideo => a instanceof GramJs.DocumentAttributeVideo);
 
@@ -410,13 +431,14 @@ export function buildApiDocument(document: GramJs.TypeDocument): ApiDocument | u
   }
 
   return {
+    mediaType: 'document',
     id: String(id),
     size: size.toJSNumber(),
     mimeType,
     timestamp: date,
     fileName: getFilenameFromDocument(document),
     thumbnail,
-    mediaType,
+    innerMediaType,
     mediaSize,
   };
 }
@@ -431,7 +453,11 @@ function buildContact(media: GramJs.TypeMessageMedia): ApiContact | undefined {
   } = media;
 
   return {
-    firstName, lastName, phoneNumber, userId: buildApiPeerId(userId, 'user'),
+    mediaType: 'contact',
+    firstName,
+    lastName,
+    phoneNumber,
+    userId: buildApiPeerId(userId, 'user'),
   };
 }
 
@@ -469,7 +495,7 @@ function buildLocationFromMedia(media: GramJs.TypeMessageMedia): ApiLocation | u
 
 function buildGeo(media: GramJs.MessageMediaGeo): ApiLocation | undefined {
   const point = buildGeoPoint(media.geo);
-  return point && { type: 'geo', geo: point };
+  return point && { mediaType: 'geo', geo: point };
 }
 
 function buildVenue(media: GramJs.MessageMediaVenue): ApiLocation | undefined {
@@ -478,7 +504,7 @@ function buildVenue(media: GramJs.MessageMediaVenue): ApiLocation | undefined {
   } = media;
   const point = buildGeoPoint(geo);
   return point && {
-    type: 'venue',
+    mediaType: 'venue',
     geo: point,
     title,
     provider,
@@ -492,7 +518,7 @@ function buildGeoLive(media: GramJs.MessageMediaGeoLive): ApiLocation | undefine
   const { geo, period, heading } = media;
   const point = buildGeoPoint(geo);
   return point && {
-    type: 'geoLive',
+    mediaType: 'geoLive',
     geo: point,
     period,
     heading,
@@ -529,6 +555,7 @@ function buildGame(media: GramJs.MessageMediaGame): ApiGame | undefined {
   const document = apiDocument instanceof GramJs.Document ? buildApiDocument(apiDocument) : undefined;
 
   return {
+    mediaType: 'game',
     id: id.toString(),
     accessHash: accessHash.toString(),
     shortName,
@@ -549,14 +576,16 @@ function buildGiweawayFromMedia(media: GramJs.TypeMessageMedia): ApiGiveaway | u
 
 function buildGiveaway(media: GramJs.MessageMediaGiveaway): ApiGiveaway | undefined {
   const {
-    channels, months, quantity, untilDate, countriesIso2, onlyNewSubscribers, prizeDescription,
+    channels, months, stars, quantity, untilDate, countriesIso2, onlyNewSubscribers, prizeDescription,
   } = media;
 
   const channelIds = channels.map((channel) => buildApiPeerId(channel, 'channel'));
 
   return {
+    mediaType: 'giveaway',
     channelIds,
     months,
+    stars: stars?.toJSNumber(),
     quantity,
     untilDate,
     countries: countriesIso2,
@@ -582,6 +611,7 @@ function buildGiveawayResults(media: GramJs.MessageMediaGiveawayResults): ApiGiv
   const winnerIds = winners.map((winner) => buildApiPeerId(winner, 'user'));
 
   return {
+    mediaType: 'giveawayResults',
     months,
     untilDate,
     isOnlyForNewSubscribers: onlyNewSubscribers,
@@ -603,25 +633,31 @@ export function buildMessageStoryData(media: GramJs.TypeMessageMedia): ApiMessag
 
   const peerId = getApiChatIdFromMtpPeer(media.peer);
 
-  return { id: media.id, peerId, ...(media.viaMention && { isMention: true }) };
+  return {
+    mediaType: 'storyData',
+    id: media.id,
+    peerId,
+    ...(media.viaMention && { isMention: true }),
+  };
 }
 
 export function buildPoll(poll: GramJs.Poll, pollResults: GramJs.PollResults): ApiPoll {
   const { id, answers: rawAnswers } = poll;
   const answers = rawAnswers.map((answer) => ({
-    text: answer.text,
+    text: buildApiFormattedText(answer.text),
     option: serializeBytes(answer.option),
   }));
 
   return {
+    mediaType: 'poll',
     id: String(id),
     summary: {
       isPublic: poll.publicVoters,
+      question: buildApiFormattedText(poll.question),
       ...pick(poll, [
         'closed',
         'multipleChoice',
         'quiz',
-        'question',
         'closePeriod',
         'closeDate',
       ]),
@@ -640,6 +676,7 @@ export function buildInvoice(media: GramJs.MessageMediaInvoice): ApiInvoice {
     ? buildApiMessageExtendedMediaPreview(extendedMedia) : undefined;
 
   return {
+    mediaType: 'invoice',
     title,
     text,
     photo: buildApiWebDocument(photo),
@@ -721,6 +758,7 @@ export function buildWebPage(media: GramJs.TypeMessageMedia): ApiWebPage | undef
   }
 
   return {
+    mediaType: 'webpage',
     id: Number(id),
     ...pick(media.webpage, [
       'url',
@@ -740,6 +778,35 @@ export function buildWebPage(media: GramJs.TypeMessageMedia): ApiWebPage | undef
   };
 }
 
+function buildPaidMedia(media: GramJs.TypeMessageMedia): ApiPaidMedia | undefined {
+  if (!(media instanceof GramJs.MessageMediaPaidMedia)) {
+    return undefined;
+  }
+
+  const { starsAmount, extendedMedia } = media;
+
+  const isBought = extendedMedia[0] instanceof GramJs.MessageExtendedMedia;
+
+  if (isBought) {
+    return {
+      mediaType: 'paidMedia',
+      starsAmount: starsAmount.toJSNumber(),
+      isBought,
+      extendedMedia: buildBoughtMediaContent(extendedMedia)!,
+    };
+  }
+
+  return {
+    mediaType: 'paidMedia',
+    starsAmount: starsAmount.toJSNumber(),
+    extendedMedia: extendedMedia
+      .filter((paidMedia): paidMedia is GramJs.MessageExtendedMediaPreview => (
+        paidMedia instanceof GramJs.MessageExtendedMediaPreview
+      ))
+      .map((paidMedia) => buildApiMessageExtendedMediaPreview(paidMedia)),
+  };
+}
+
 function getFilenameFromDocument(document: GramJs.Document, defaultBase = 'file') {
   const { mimeType, attributes } = document;
   const filenameAttribute = attributes
@@ -756,12 +823,13 @@ function getFilenameFromDocument(document: GramJs.Document, defaultBase = 'file'
 
 export function buildApiMessageExtendedMediaPreview(
   preview: GramJs.MessageExtendedMediaPreview,
-): ApiMessageExtendedMediaPreview {
+): ApiMediaExtendedPreview {
   const {
     w, h, thumb, videoDuration,
   } = preview;
 
   return {
+    mediaType: 'extendedMediaPreview',
     width: w,
     height: h,
     duration: videoDuration,
@@ -782,10 +850,26 @@ export function buildApiWebDocument(document?: GramJs.TypeWebDocument): ApiWebDo
   const dimensions = sizeAttr && { width: sizeAttr.w, height: sizeAttr.h };
 
   return {
+    mediaType: 'webDocument',
     url,
     accessHash,
     size,
     mimeType,
     dimensions,
   };
+}
+
+export function buildBoughtMediaContent(
+  media: GramJs.TypeMessageExtendedMedia[],
+): BoughtPaidMedia[] | undefined {
+  const boughtMedia = media
+    .filter((m): m is GramJs.MessageExtendedMedia => m instanceof GramJs.MessageExtendedMedia)
+    .map((m) => buildMessageMediaContent(m.media))
+    .filter(Boolean);
+
+  if (!boughtMedia.length) {
+    return undefined;
+  }
+
+  return boughtMedia;
 }

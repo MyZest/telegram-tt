@@ -26,12 +26,13 @@ const { uploadFile } = require('./uploadFile');
 const {
     updateTwoFaSettings,
     getTmpPassword,
+    getCurrentPassword,
 } = require('./2fa');
 const RequestState = require('../network/RequestState');
 const Deferred = require('../../../util/Deferred').default;
 
 const DEFAULT_DC_ID = 2;
-const WEBDOCUMENT_DC_ID = 4;
+const DEFAULT_WEBDOCUMENT_DC_ID = 4;
 const EXPORTED_SENDER_RECONNECT_TIMEOUT = 1000; // 1 sec
 const EXPORTED_SENDER_RELEASE_TIMEOUT = 30000; // 30 sec
 const WEBDOCUMENT_REQUEST_PART_SIZE = 131072; // 128kb
@@ -705,45 +706,18 @@ class TelegramClient {
     }
 
     downloadProfilePhoto(entity, isBig = false) {
-        // ('User', 'Chat', 'UserFull', 'ChatFull')
-        const ENTITIES = [0x2da17977, 0xc5af5d94, 0x1f4661b9, 0xd49a2697];
-        // ('InputPeer', 'InputUser', 'InputChannel')
-        // const INPUTS = [0xc91c90b6, 0xe669bf46, 0x40f202fd]
-        // Todo account for input methods
-        const sizeType = isBig ? 'x' : 'm';
-        let photo;
-        if (!(ENTITIES.includes(entity.SUBCLASS_OF_ID))) {
-            photo = entity;
-        } else {
-            if (!entity.photo) {
-                // Special case: may be a ChatFull with photo:Photo
-                if (!entity.chatPhoto) {
-                    return undefined;
-                }
+        const photo = entity.photo;
 
-                return this._downloadPhoto(
-                    entity.chatPhoto, { sizeType },
-                );
-            }
-            photo = entity.photo;
-        }
+        if (!(photo instanceof constructors.UserProfilePhoto
+            || photo instanceof constructors.ChatPhoto)) return undefined;
 
-        let dcId;
-        let loc;
-        if (photo instanceof constructors.UserProfilePhoto || photo instanceof constructors.ChatPhoto) {
-            dcId = photo.dcId;
-            loc = new constructors.InputPeerPhotoFileLocation({
-                peer: utils.getInputPeer(entity),
-                photoId: photo.photoId,
-                big: isBig,
-            });
-        } else {
-            // It doesn't make any sense to check if `photo` can be used
-            // as input location, because then this method would be able
-            // to "download the profile photo of a message", i.e. its
-            // media which should be done with `download_media` instead.
-            return undefined;
-        }
+        const dcId = photo.dcId;
+        const loc = new constructors.InputPeerPhotoFileLocation({
+            peer: utils.getInputPeer(entity),
+            photoId: photo.photoId,
+            big: isBig,
+        });
+
         return this.downloadFile(loc, {
             dcId,
         });
@@ -819,10 +793,16 @@ class TelegramClient {
         if (!(photo instanceof constructors.Photo)) {
             return undefined;
         }
+
+        const maxSize = photo.sizes.reduce((max, current) => {
+            if (!current.w) return max;
+            return max.w > current.w ? max : current;
+        });
         const isVideoSize = args.sizeType === 'u' || args.sizeType === 'v';
-        const size = this._pickFileSize(isVideoSize
-            ? [...photo.videoSizes, ...photo.sizes]
-            : photo.sizes, args.sizeType);
+        const size = !args.sizeType
+            ? maxSize
+            : this._pickFileSize(isVideoSize ? [...photo.videoSizes, ...photo.sizes] : photo.sizes, args.sizeType);
+
         if (!size || (size instanceof constructors.PhotoSizeEmpty)) {
             return undefined;
         }
@@ -909,7 +889,10 @@ class TelegramClient {
                     offset,
                     limit: WEBDOCUMENT_REQUEST_PART_SIZE,
                 });
-                const sender = await this._borrowExportedSender(WEBDOCUMENT_DC_ID);
+
+                const sender = await this._borrowExportedSender(
+                    this._config?.webfileDcId || DEFAULT_WEBDOCUMENT_DC_ID,
+                );
                 const res = await sender.send(downloaded);
                 this.releaseExportedSender(sender);
                 offset += 131072;
@@ -956,7 +939,7 @@ class TelegramClient {
                         offset,
                         limit: WEBDOCUMENT_REQUEST_PART_SIZE,
                     });
-                    const sender = await this._borrowExportedSender(WEBDOCUMENT_DC_ID);
+                    const sender = await this._borrowExportedSender(DEFAULT_WEBDOCUMENT_DC_ID);
                     const res = await sender.send(downloaded);
                     this.releaseExportedSender(sender);
                     offset += 131072;
@@ -1102,10 +1085,18 @@ class TelegramClient {
         return undefined;
     }
 
+    async loadConfig() {
+        if (!this._config) {
+            this._config = await this.invoke(new requests.help.GetConfig());
+        }
+    }
+
     async start(authParams) {
         if (!this.isConnected()) {
             await this.connect();
         }
+
+        this.loadConfig();
 
         if (await checkAuthorization(this, authParams.shouldThrowIfUnauthorized)) {
             return;
@@ -1129,6 +1120,10 @@ class TelegramClient {
 
     getTmpPassword(currentPassword, ttl) {
         return getTmpPassword(this, currentPassword, ttl);
+    }
+
+    getCurrentPassword(currentPassword) {
+        return getCurrentPassword(this, currentPassword);
     }
 
     // event region

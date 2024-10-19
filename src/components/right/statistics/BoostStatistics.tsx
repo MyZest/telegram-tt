@@ -3,7 +3,7 @@ import React, {
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiBoost, ApiBoostStatistics, ApiPrepaidGiveaway } from '../../../api/types';
+import type { ApiBoost, ApiBoostStatistics, ApiTypePrepaidGiveaway } from '../../../api/types';
 import type { TabState } from '../../../global/types';
 
 import {
@@ -16,15 +16,15 @@ import {
   selectTabState,
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
-import { formatDateAtTime } from '../../../util/date/dateFormat';
-import { CUSTOM_PEER_TO_BE_DISTRIBUTED } from '../../../util/objects/customPeer';
+import { formatDateAtTime } from '../../../util/dates/dateFormat';
+import { CUSTOM_PEER_STAR, CUSTOM_PEER_TO_BE_DISTRIBUTED } from '../../../util/objects/customPeer';
 import { formatInteger } from '../../../util/textFormat';
 import { getBoostProgressInfo } from '../../common/helpers/boostInfo';
 
-import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
+import useOldLang from '../../../hooks/useOldLang';
 
-import Icon from '../../common/Icon';
+import Icon from '../../common/icons/Icon';
 import LinkField from '../../common/LinkField';
 import PremiumProgress from '../../common/PremiumProgress';
 import PrivateChatInfo from '../../common/PrivateChatInfo';
@@ -40,6 +40,7 @@ import styles from './BoostStatistics.module.scss';
 import GiftBlueRound from '../../../assets/premium/GiftBlueRound.svg';
 import GiftGreenRound from '../../../assets/premium/GiftGreenRound.svg';
 import GiftRedRound from '../../../assets/premium/GiftRedRound.svg';
+import GiftStar from '../../../assets/premium/GiftStar.svg';
 
 type StateProps = {
   boostStatistics: TabState['boostStatistics'];
@@ -65,7 +66,7 @@ const BoostStatistics = ({
   const {
     openChat, loadMoreBoosters, closeBoostStatistics, openGiveawayModal, showNotification,
   } = getActions();
-  const lang = useLang();
+  const lang = useOldLang();
   // eslint-disable-next-line no-null/no-null
   const transitionRef = useRef<HTMLDivElement>(null);
 
@@ -177,7 +178,7 @@ const BoostStatistics = ({
         >
           <Icon name="gift" className={styles.floatingBadgeIcon} />
           <div className={styles.floatingBadgeValue}>{lang(boost.isFromGiveaway
-            ? 'lng_prizes_results_link' : 'BoostingGift')}
+            ? 'BoostingGiveaway' : 'BoostingGift')}
           </div>
         </div>
       </div>
@@ -196,6 +197,8 @@ const BoostStatistics = ({
   });
 
   const renderBoostList = useLastCallback((boost) => {
+    const hasStars = Boolean(boost?.stars);
+
     return (
       <ListItem
         className="chat-item-clickable"
@@ -205,7 +208,8 @@ const BoostStatistics = ({
         <PrivateChatInfo
           className={styles.user}
           userId={boost.userId}
-          customPeer={!boost.userId ? CUSTOM_PEER_TO_BE_DISTRIBUTED : undefined}
+          customPeer={hasStars ? { ...CUSTOM_PEER_STAR, titleValue: boost.stars }
+            : (!boost.userId ? CUSTOM_PEER_TO_BE_DISTRIBUTED : undefined)}
           status={lang('BoostExpireOn', formatDateAtTime(lang, boost.expires * 1000))}
           noEmojiStatus
           forceShowSelf
@@ -222,11 +226,12 @@ const BoostStatistics = ({
     openGiveawayModal({ chatId });
   });
 
-  const handleLoadMore = useLastCallback(() => {
+  const handleLoadMore = useLastCallback((e) => {
+    e.preventDefault();
     loadMoreBoosters({ isGifts: tabType === 'giftedBoostList' });
   });
 
-  const launchPrepaidGiveawayHandler = useLastCallback((prepaidGiveaway: ApiPrepaidGiveaway) => {
+  const launchPrepaidGiveawayHandler = useLastCallback((prepaidGiveaway: ApiTypePrepaidGiveaway) => {
     openGiveawayModal({ chatId, prepaidGiveaway });
   });
 
@@ -243,7 +248,7 @@ const BoostStatistics = ({
     }
 
     return (
-      <div className={styles.content}>
+      <div className={styles.section}>
         {listToRender?.map((boost) => renderBoostList(boost))}
       </div>
     );
@@ -269,57 +274,79 @@ const BoostStatistics = ({
               <h4 className={styles.sectionHeader} dir={lang.isRtl ? 'rtl' : undefined}>
                 {lang('BoostingPreparedGiveaways')}
               </h4>
-              {statsOverview?.prepaidGiveaways?.map((prepaidGiveaway) => (
-                <ListItem
-                  key={prepaidGiveaway.id}
-                  className="chat-item-clickable"
-                  // eslint-disable-next-line react/jsx-no-bind
-                  onClick={() => launchPrepaidGiveawayHandler(prepaidGiveaway)}
-                >
-                  <div className={buildClassName(styles.status, 'status-clickable')}>
-                    <div>
-                      <img src={GIVEAWAY_IMG_LIST[prepaidGiveaway.months]} alt="Giveaway" />
-                    </div>
-                    <div className={styles.info}>
-                      <h3>
-                        {lang('BoostingTelegramPremiumCountPlural', prepaidGiveaway.quantity)}
-                      </h3>
-                      <p className={styles.month}>{lang('PrepaidGiveawayMonths', prepaidGiveaway.months)}</p>
-                    </div>
-                    <div className={styles.quantity}>
-                      <div className={buildClassName(styles.floatingBadge,
-                        styles.floatingBadgeButtonColor,
-                        styles.floatingBadgeButton)}
-                      >
-                        <Icon name="boost" className={styles.floatingBadgeIcon} />
-                        <div className={styles.floatingBadgeValue} dir={lang.isRtl ? 'rtl' : undefined}>
-                          {prepaidGiveaway.quantity * (giveawayBoostsPerPremium ?? GIVEAWAY_BOOST_PER_PREMIUM)}
+              {statsOverview?.prepaidGiveaways?.map((prepaidGiveaway) => {
+                const isStarsGiveaway = 'stars' in prepaidGiveaway;
+
+                return (
+                  <ListItem
+                    key={prepaidGiveaway.id}
+                    className="chat-item-clickable"
+                    // eslint-disable-next-line react/jsx-no-bind
+                    onClick={() => launchPrepaidGiveawayHandler(prepaidGiveaway)}
+                  >
+                    <div className={buildClassName(styles.status, 'status-clickable')}>
+                      <div>
+                        {isStarsGiveaway
+                          ? (
+                            <img
+                              src={GiftStar}
+                              className={styles.giveawayIcon}
+                              alt={lang('GiftStar')}
+                            />
+                          ) : (
+                            <img
+                              src={GIVEAWAY_IMG_LIST[prepaidGiveaway.months]}
+                              className={styles.giveawayIcon}
+                              alt={lang('Giveaway')}
+                            />
+                          )}
+                      </div>
+                      <div className={styles.info}>
+                        <h3>
+                          {isStarsGiveaway
+                            ? lang('Giveaway.Stars.Prepaid.Title', prepaidGiveaway.stars)
+                            : lang('BoostingTelegramPremiumCountPlural', prepaidGiveaway.quantity)}
+                        </h3>
+                        <p className={styles.month}>{
+                          isStarsGiveaway ? lang('Giveaway.Stars.Prepaid.Desc', prepaidGiveaway.quantity)
+                            : lang('PrepaidGiveawayMonths', prepaidGiveaway.months)
+                        }
+                        </p>
+                      </div>
+                      <div className={styles.quantity}>
+                        <div className={buildClassName(styles.floatingBadge,
+                          styles.floatingBadgeButtonColor,
+                          styles.floatingBadgeButton)}
+                        >
+                          <Icon name="boost" className={styles.floatingBadgeIcon} />
+                          <div className={styles.floatingBadgeValue} dir={lang.isRtl ? 'rtl' : undefined}>
+                            {isStarsGiveaway ? prepaidGiveaway.boosts
+                              : prepaidGiveaway.quantity * (giveawayBoostsPerPremium ?? GIVEAWAY_BOOST_PER_PREMIUM)}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </ListItem>
-              ))}
+                  </ListItem>
+                );
+              })}
               <p className="text-muted hint" key="links-hint">{lang('BoostingSelectPaidGiveaway')}</p>
             </div>
           )}
           <div className={styles.section}>
             {shouldDisplayGiftList ? (
               <div
-                className={styles.boostSection}
+                className={buildClassName(styles.boostSection, styles.content)}
               >
                 <Transition
-                  key={activeKey}
                   ref={transitionRef}
                   name={lang.isRtl ? 'slideOptimizedRtl' : 'slideOptimized'}
                   activeKey={activeKey}
                   renderCount={tabs.length}
                   shouldRestoreHeight
-                  className="shared-media-transition"
                 >
                   {renderContent()}
                 </Transition>
-                <TabList big activeTab={renderingActiveTab} tabs={tabs} onSwitchTab={setActiveTab} />
+                <TabList activeTab={renderingActiveTab} tabs={tabs} onSwitchTab={setActiveTab} />
               </div>
             ) : (
               <>
@@ -352,7 +379,12 @@ const BoostStatistics = ({
           <LinkField className={styles.section} link={status!.boostUrl} withShare title={lang('LinkForBoosting')} />
           {isGiveawayAvailable && (
             <div className={styles.section}>
-              <ListItem icon="gift" ripple onClick={handleGiveawayClick} className={styles.giveawayButton}>
+              <ListItem
+                key="load-more"
+                icon="gift"
+                onClick={handleGiveawayClick}
+                className={styles.giveawayButton}
+              >
                 {lang('BoostingGetBoostsViaGifts')}
               </ListItem>
               <p className="text-muted hint" key="links-hint">{lang(

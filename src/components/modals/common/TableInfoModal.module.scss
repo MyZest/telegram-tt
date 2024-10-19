@@ -1,0 +1,77 @@
+@use '../../../styles/mixins';
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: min(92vh, 40rem) !important;
+  overflow-x: hidden;
+}
+
+.title {
+  background-color: var(--color-background-secondary);
+}
+
+.value {
+  word-break: break-word;
+}
+
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.cell {
+  border: solid 0.0625rem var(--color-borders);
+  border-style: none solid solid none;
+  padding: 0.25rem 0.5rem;
+}
+
+.row:first-child .cell:first-child { border-top-left-radius: 0.3125rem; }
+
+.row:first-child .cell:last-child { border-top-right-radius: 0.3125rem; }
+
+.row:last-child .cell:first-child { border-bottom-left-radius: 0.3125rem; }
+
+.row:last-child .cell:last-child { border-bottom-right-radius: 0.3125rem; }
+
+.row:first-child .cell { border-top-style: solid; }
+
+.row .cell:first-child { border-left-style: solid; }
+
+.section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  padding: 0.5rem;
+  position: relative;
+
+  @include mixins.adapt-padding-to-scrollbar(0.5rem);
+}
+
+.logo {
+  margin: 1rem;
+  width: 6.25rem;
+  height: 6.25rem;
+  min-height: 6.25rem;
+}
+
+.logoBackground {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 8rem;
+}
+
+.avatar {
+  align-self: center;
+}
+
+.chatItem {
+  margin: 0;
+  width: fit-content;
+  background-color: var(--color-background);
+  color: var(--color-primary);
+}

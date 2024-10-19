@@ -22,6 +22,7 @@ import {
   selectOutgoingStatus,
   selectThreadInfo,
   selectThreadParam,
+  selectTopics,
   selectUser,
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
@@ -30,8 +31,8 @@ import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../../../util/windowEnvironment';
 import renderText from '../../common/helpers/renderText';
 
 import useFlag from '../../../hooks/useFlag';
-import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
+import useOldLang from '../../../hooks/useOldLang';
 import useChatListEntry from './hooks/useChatListEntry';
 import useTopicContextActions from './hooks/useTopicContextActions';
 
@@ -68,6 +69,7 @@ type StateProps = {
   canScrollDown?: boolean;
   wasTopicOpened?: boolean;
   withInterfaceAnimations?: boolean;
+  topics?: Record<number, ApiTopic>;
 };
 
 const Topic: FC<OwnProps & StateProps> = ({
@@ -91,6 +93,7 @@ const Topic: FC<OwnProps & StateProps> = ({
   typingStatus,
   draft,
   wasTopicOpened,
+  topics,
 }) => {
   const {
     openThread,
@@ -99,7 +102,7 @@ const Topic: FC<OwnProps & StateProps> = ({
     setViewForumAsMessages,
   } = getActions();
 
-  const lang = useLang();
+  const lang = useOldLang();
 
   const [isDeleteModalOpen, openDeleteModal, closeDeleteModal] = useFlag();
   const [isMuteModalOpen, openMuteModal, closeMuteModal] = useFlag();
@@ -138,6 +141,7 @@ const Topic: FC<OwnProps & StateProps> = ({
     observeIntersection,
     isTopic: true,
     typingStatus,
+    topics,
 
     animationType,
     withInterfaceAnimations,
@@ -208,6 +212,7 @@ const Topic: FC<OwnProps & StateProps> = ({
             isMuted={isMuted}
             topic={topic}
             wasTopicOpened={wasTopicOpened}
+            topics={topics}
           />
         </div>
       </div>
@@ -253,6 +258,7 @@ export default memo(withGlobal<OwnProps>(
     const draft = selectDraft(global, chatId, topic.id);
     const threadInfo = selectThreadInfo(global, chatId, topic.id);
     const wasTopicOpened = Boolean(threadInfo?.lastReadInboxMessageId);
+    const topics = selectTopics(global, chatId);
 
     const { chatId: currentChatId, threadId: currentThreadId } = selectCurrentMessageList(global) || {};
 
@@ -272,6 +278,7 @@ export default memo(withGlobal<OwnProps>(
       }),
       canScrollDown: isSelected && chat?.id === currentChatId && currentThreadId === topic.id,
       wasTopicOpened,
+      topics,
     };
   },
 )(Topic));

@@ -7,6 +7,7 @@ import type { ApiAppConfig } from '../../types';
 
 import {
   DEFAULT_LIMITS,
+  MAX_UNIQUE_REACTIONS,
   SERVICE_NOTIFICATIONS_USER_ID,
   STORY_EXPIRE_PERIOD,
   STORY_VIEWERS_EXPIRE_PERIOD,
@@ -76,10 +77,12 @@ export interface GramJsAppConfig extends LimitsConfig {
   group_transcribe_level_min?: number;
   new_noncontact_peers_require_premium_without_ownpremium?: boolean;
   channel_restrict_sponsored_level_min?: number;
+  channel_revenue_withdrawal_enabled?: boolean;
   // Upload premium notifications
   upload_premium_speedup_notify_period?: number;
   upload_premium_speedup_download?: number;
   upload_premium_speedup_upload?: number;
+  stars_gifts_enabled?: boolean;
 }
 
 function buildEmojiSounds(appConfig: GramJsAppConfig) {
@@ -116,7 +119,7 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
     readDateExpiresAt: appConfig.pm_read_date_expire_period,
     autologinDomains: appConfig.autologin_domains || [],
     urlAuthDomains: appConfig.url_auth_domains || [],
-    maxUniqueReactions: appConfig.reactions_uniq_max,
+    maxUniqueReactions: appConfig.reactions_uniq_max ?? MAX_UNIQUE_REACTIONS,
     premiumBotUsername: appConfig.premium_bot_username,
     premiumInvoiceSlug: appConfig.premium_invoice_slug,
     premiumPromoOrder: appConfig.premium_promo_order as ApiPremiumSection[],
@@ -160,5 +163,7 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
     bandwidthPremiumUploadSpeedup: appConfig.upload_premium_speedup_upload,
     bandwidthPremiumDownloadSpeedup: appConfig.upload_premium_speedup_download,
     channelRestrictAdsLevelMin: appConfig.channel_restrict_sponsored_level_min,
+    isChannelRevenueWithdrawalEnabled: appConfig.channel_revenue_withdrawal_enabled,
+    isStarsGiftsEnabled: appConfig.stars_gifts_enabled,
   };
 }

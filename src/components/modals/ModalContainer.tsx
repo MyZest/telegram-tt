@@ -15,6 +15,9 @@ import InviteViaLinkModal from './inviteViaLink/InviteViaLinkModal.async';
 import MapModal from './map/MapModal.async';
 import OneTimeMediaModal from './oneTimeMedia/OneTimeMediaModal.async';
 import ReportAdModal from './reportAd/ReportAdModal.async';
+import StarsBalanceModal from './stars/StarsBalanceModal.async';
+import StarsPaymentModal from './stars/StarsPaymentModal.async';
+import StarsTransactionInfoModal from './stars/transaction/StarsTransactionModal.async';
 import UrlAuthModal from './urlAuth/UrlAuthModal.async';
 import WebAppModal from './webApp/WebAppModal.async';
 
@@ -30,7 +33,10 @@ type ModalKey = keyof Pick<TabState,
 'requestedAttachBotInstall' |
 'collectibleInfoModal' |
 'reportAdModal' |
-'webApp'
+'starsBalanceModal' |
+'isStarPaymentModalOpen' |
+'webApps' |
+'starsTransactionModal'
 >;
 
 type StateProps = {
@@ -54,9 +60,12 @@ const MODALS: ModalRegistry = {
   inviteViaLinkModal: InviteViaLinkModal,
   requestedAttachBotInstall: AttachBotInstallModal,
   reportAdModal: ReportAdModal,
-  webApp: WebAppModal,
+  webApps: WebAppModal,
   collectibleInfoModal: CollectibleInfoModal,
   mapModal: MapModal,
+  isStarPaymentModalOpen: StarsPaymentModal,
+  starsBalanceModal: StarsBalanceModal,
+  starsTransactionModal: StarsTransactionInfoModal,
 };
 const MODAL_KEYS = Object.keys(MODALS) as ModalKey[];
 const MODAL_ENTRIES = Object.entries(MODALS) as Entries<ModalRegistry>;

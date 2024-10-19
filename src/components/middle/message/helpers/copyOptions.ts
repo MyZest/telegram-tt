@@ -5,14 +5,14 @@ import { ApiMediaFormat } from '../../../../api/types';
 import {
   getMessageContact,
   getMessageHtmlId,
-  getMessageMediaHash,
   getMessagePhoto,
   getMessageText,
-  getMessageTextWithSpoilers,
   getMessageWebPagePhoto,
   getMessageWebPageVideo,
-  hasMessageLocalBlobUrl,
+  getPhotoMediaHash,
+  hasMediaLocalBlobUrl,
 } from '../../../../global/helpers';
+import { getMessageTextWithSpoilers } from '../../../../global/helpers/messageSummary';
 import {
   CLIPBOARD_ITEM_SUPPORTED,
   copyHtmlToClipboard,
@@ -44,8 +44,8 @@ export function getMessageCopyOptions(
   const photo = getMessagePhoto(message)
     || (!getMessageWebPageVideo(message) ? getMessageWebPagePhoto(message) : undefined);
   const contact = getMessageContact(message);
-  const mediaHash = getMessageMediaHash(message, 'inline');
-  const canImageBeCopied = canCopy && photo && (mediaHash || hasMessageLocalBlobUrl(message))
+  const mediaHash = photo ? getPhotoMediaHash(photo, 'inline') : undefined;
+  const canImageBeCopied = canCopy && photo && (mediaHash || hasMediaLocalBlobUrl(photo))
     && CLIPBOARD_ITEM_SUPPORTED && !IS_SAFARI;
   const selection = window.getSelection();
 

@@ -1,4 +1,3 @@
-import type { FC } from '../../../../lib/teact/teact';
 import React, { memo } from '../../../../lib/teact/teact';
 
 import type {
@@ -22,7 +21,7 @@ import styles from './ReactionButton.module.scss';
 
 const REACTION_SIZE = 1.25 * REM;
 
-const ReactionButton: FC<{
+type OwnProps = {
   reaction: ApiReactionCount;
   containerId: string;
   isOwnMessage?: boolean;
@@ -31,7 +30,9 @@ const ReactionButton: FC<{
   chosenClassName?: string;
   observeIntersection?: ObserveFn;
   onClick?: (reaction: ApiReaction) => void;
-}> = ({
+};
+
+const ReactionButton = ({
   reaction,
   containerId,
   isOwnMessage,
@@ -40,7 +41,7 @@ const ReactionButton: FC<{
   chosenClassName,
   observeIntersection,
   onClick,
-}) => {
+}: OwnProps) => {
   const handleClick = useLastCallback(() => {
     onClick?.(reaction.reaction);
   });

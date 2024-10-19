@@ -2,7 +2,7 @@ import type { FC } from '../../lib/teact/teact';
 import React, { memo, useEffect, useMemo } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
-import type { ApiShippingAddress, ApiWebDocument } from '../../api/types';
+import type { ApiInvoice, ApiShippingAddress, ApiWebDocument } from '../../api/types';
 import type { Price } from '../../types';
 
 import { selectTabState } from '../../global/selectors';
@@ -68,8 +68,9 @@ const ReceiptModal: FC<OwnProps & StateProps> = ({
     return getCheckoutInfo(credentialsTitle, info, shippingMethod);
   }, [info, shippingMethod, credentialsTitle]);
 
-  const invoice = useMemo(() => {
+  const invoice: ApiInvoice = useMemo(() => {
     return {
+      mediaType: 'invoice',
       photo,
       text: text!,
       title: title!,

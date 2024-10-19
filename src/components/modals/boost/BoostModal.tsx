@@ -7,17 +7,17 @@ import type { TabState } from '../../../global/types';
 import { getChatTitle, isChatAdmin, isChatChannel } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo, selectIsCurrentUserPremium } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
-import { formatDateInFuture } from '../../../util/date/dateFormat';
+import { formatDateInFuture } from '../../../util/dates/dateFormat';
 import { getServerTime } from '../../../util/serverTime';
 import { getBoostProgressInfo } from '../../common/helpers/boostInfo';
 import renderText from '../../common/helpers/renderText';
 
 import useFlag from '../../../hooks/useFlag';
-import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
+import useOldLang from '../../../hooks/useOldLang';
 
 import Avatar from '../../common/Avatar';
-import Icon from '../../common/Icon';
+import Icon from '../../common/icons/Icon';
 import PremiumProgress from '../../common/PremiumProgress';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
@@ -79,7 +79,7 @@ const BoostModal = ({
 
   const isOpen = Boolean(modal);
 
-  const lang = useLang();
+  const lang = useOldLang();
 
   useEffect(() => {
     if (chat && !chatFullInfo) {

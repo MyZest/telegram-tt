@@ -239,7 +239,7 @@
       body.is-ios &,
       body.is-macos & {
         font-size: calc(var(--message-text-size, 1rem) - 0.125rem);
-        line-height: calc(var(--message-text-size, 1rem) + 0.5rem);
+        line-height: calc(var(--message-text-size, 1rem) + 0.2rem);
       }
 
       .emoji-small {
@@ -273,12 +273,30 @@
   }
 
   .action-message-gift-code {
-    width: 20rem;
+    width: 12rem;
     margin-inline: auto;
+  }
+
+  .action-message-stars-gift {
+    width: 15rem;
+    margin-inline: auto;
+  }
+
+  .action-message-stars-balance {
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 0.25rem;
+    line-height: 1.5;
+    font-weight: 500;
   }
 
   .action-message-subtitle {
     margin-top: 1rem;
+    font-weight: normal;
+    text-wrap: balance;
+  }
+
+  .action-message-stars-subtitle {
     font-weight: normal;
     text-wrap: balance;
   }

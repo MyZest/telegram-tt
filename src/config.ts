@@ -33,7 +33,7 @@ export const INACTIVE_MARKER = '[Inactive]';
 export const DEBUG_PAYMENT_SMART_GLOCAL = false;
 
 export const SESSION_USER_KEY = 'user_auth';
-export const PASSCODE_CACHE_NAME = 'tt-passcode';
+export const LEGACY_PASSCODE_CACHE_NAME = 'tt-passcode';
 
 export const GLOBAL_STATE_CACHE_DISABLED = false;
 export const GLOBAL_STATE_CACHE_KEY = 'tt-global-state';
@@ -42,6 +42,8 @@ export const GLOBAL_STATE_CACHE_CHAT_LIST_LIMIT = 200;
 export const GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT = 10;
 export const GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT = 150;
 
+export const IS_SCREEN_LOCKED_CACHE_KEY = 'tt-is-screen-locked';
+
 export const MEDIA_CACHE_DISABLED = false;
 export const MEDIA_CACHE_NAME = 'tt-media';
 export const MEDIA_CACHE_NAME_AVATARS = 'tt-media-avatars';
@@ -49,7 +51,7 @@ export const MEDIA_PROGRESSIVE_CACHE_DISABLED = false;
 export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive';
 export const MEDIA_CACHE_MAX_BYTES = 512 * 1024; // 512 KB
 export const CUSTOM_BG_CACHE_NAME = 'tt-custom-bg';
-export const LANG_CACHE_NAME = 'tt-lang-packs-v35';
+export const LANG_CACHE_NAME = 'tt-lang-packs-v42';
 export const ASSET_CACHE_NAME = 'tt-assets';
 export const AUTODOWNLOAD_FILESIZE_MB_LIMITS = [1, 5, 10, 50, 100, 500];
 export const DATA_BROADCAST_CHANNEL_NAME = 'tt-global';
@@ -69,9 +71,11 @@ export const MESSAGE_LIST_VIEWPORT_LIMIT = MESSAGE_LIST_SLICE * 2;
 export const ARCHIVE_MINIMIZED_HEIGHT = 36;
 export const CHAT_HEIGHT_PX = 72;
 export const TOPIC_HEIGHT_PX = 65;
+export const PEER_PICKER_ITEM_HEIGHT_PX = 56;
 export const CHAT_LIST_SLICE = isBigScreen ? 30 : 25;
 export const CHAT_LIST_LOAD_SLICE = 100;
 export const SHARED_MEDIA_SLICE = 42;
+export const CHAT_MEDIA_SLICE = 42;
 export const MESSAGE_SEARCH_SLICE = 42;
 export const GLOBAL_SEARCH_SLICE = 20;
 export const GLOBAL_TOPIC_SEARCH_SLICE = 5;
@@ -80,10 +84,8 @@ export const MEMBERS_SLICE = 30;
 export const MEMBERS_LOAD_SLICE = 200;
 export const PINNED_MESSAGES_LIMIT = 50;
 export const BLOCKED_LIST_LIMIT = 100;
-export const PROFILE_PHOTOS_LIMIT = 40;
 export const PROFILE_SENSITIVE_AREA = 500;
 export const TOPIC_LIST_SENSITIVE_AREA = 600;
-export const COMMON_CHATS_LIMIT = 100;
 export const GROUP_CALL_PARTICIPANTS_LIMIT = 100;
 export const STORY_LIST_LIMIT = 100;
 export const API_GENERAL_ID_LIMIT = 100;
@@ -146,6 +148,9 @@ export const CUSTOM_APPENDIX_ATTRIBUTE = 'data-has-custom-appendix';
 export const MESSAGE_CONTENT_CLASS_NAME = 'message-content';
 export const MESSAGE_CONTENT_SELECTOR = '.message-content';
 
+export const STARS_ICON_PLACEHOLDER = '⭐';
+export const STARS_CURRENCY_CODE = 'XTR';
+
 // Screen width where Pinned Message / Audio Player in the Middle Header can be safely displayed
 export const SAFE_SCREEN_WIDTH_FOR_STATIC_RIGHT_COLUMN = 1440; // px
 // Screen width where Pinned Message / Audio Player in the Middle Header shouldn't collapse with ChatInfo
@@ -163,16 +168,15 @@ export const TMP_CHAT_ID = '0';
 
 export const ANIMATION_END_DELAY = 100;
 
-export const FAST_SMOOTH_MIN_DURATION = 300;
-export const FAST_SMOOTH_MAX_DURATION = 600;
-export const FAST_SMOOTH_MAX_DISTANCE = 750;
-export const FAST_SMOOTH_SHORT_TRANSITION_MAX_DISTANCE = 300; // px
+export const SCROLL_MIN_DURATION = 300;
+export const SCROLL_MAX_DURATION = 600;
+export const SCROLL_MAX_DISTANCE = 800;
+export const SCROLL_SHORT_TRANSITION_MAX_DISTANCE = 300; // px
 
 // Average duration of message sending animation
-export const API_UPDATE_THROTTLE = Math.round((FAST_SMOOTH_MIN_DURATION + FAST_SMOOTH_MAX_DURATION) / 2);
+export const API_UPDATE_THROTTLE = Math.round((SCROLL_MIN_DURATION + SCROLL_MAX_DURATION) / 2);
 export const API_THROTTLE_RESET_UPDATES = new Set([
   'newMessage', 'newScheduledMessage', 'deleteMessages', 'deleteScheduledMessages', 'deleteHistory',
-  'updateThreadInfos',
 ]);
 
 export const LOCK_SCREEN_ANIMATION_DURATION_MS = 200;
@@ -205,6 +209,8 @@ export const TOP_SYMBOL_SET_ID = 'top';
 export const POPULAR_SYMBOL_SET_ID = 'popular';
 export const RECENT_SYMBOL_SET_ID = 'recent';
 export const FAVORITE_SYMBOL_SET_ID = 'favorite';
+export const EFFECT_STICKERS_SET_ID = 'effectStickers';
+export const EFFECT_EMOJIS_SET_ID = 'effectEmojis';
 export const CHAT_STICKER_SET_ID = 'chatStickers';
 export const DEFAULT_TOPIC_ICON_STICKER_ID = 'topic-default-icon';
 export const DEFAULT_STATUS_ICON_ID = 'status-default-icon';
@@ -223,7 +229,7 @@ export const GIF_MIME_TYPE = 'image/gif';
 export const LOTTIE_STICKER_MIME_TYPE = 'application/x-tgsticker';
 export const VIDEO_STICKER_MIME_TYPE = VIDEO_WEBM_TYPE;
 
-export const SUPPORTED_IMAGE_CONTENT_TYPES = new Set([
+export const SUPPORTED_PHOTO_CONTENT_TYPES = new Set([
   'image/png', 'image/jpeg', GIF_MIME_TYPE,
 ]);
 
@@ -244,7 +250,7 @@ export const SUPPORTED_AUDIO_CONTENT_TYPES = new Set([
 ]);
 
 export const CONTENT_TYPES_WITH_PREVIEW = new Set([
-  ...SUPPORTED_IMAGE_CONTENT_TYPES,
+  ...SUPPORTED_PHOTO_CONTENT_TYPES,
   ...SUPPORTED_VIDEO_CONTENT_TYPES,
 ]);
 
@@ -279,6 +285,7 @@ export const TME_LINK_PREFIX = 'https://t.me/';
 export const BOT_FATHER_USERNAME = 'botfather';
 export const USERNAME_PURCHASE_ERROR = 'USERNAME_PURCHASE_AVAILABLE';
 export const PURCHASE_USERNAME = 'auction';
+export const ACCEPTABLE_USERNAME_ERRORS = new Set([USERNAME_PURCHASE_ERROR, 'USERNAME_INVALID']);
 export const TME_WEB_DOMAINS = new Set(['t.me', 'web.t.me', 'a.t.me', 'k.t.me', 'z.t.me']);
 export const WEB_APP_PLATFORM = 'weba';
 
@@ -312,6 +319,7 @@ export const FEEDBACK_URL = 'https://bugs.telegram.org/?tag_ids=41&sort=time';
 export const FAQ_URL = 'https://telegram.org/faq';
 export const PRIVACY_URL = 'https://telegram.org/privacy';
 export const MINI_APP_TOS_URL = 'https://telegram.org/tos/mini-apps';
+export const FRAGMENT_ADS_URL = 'https://fragment.com/ads';
 export const GENERAL_TOPIC_ID = 1;
 export const STORY_EXPIRE_PERIOD = 86400; // 1 day
 export const STORY_VIEWERS_EXPIRE_PERIOD = 86400; // 1 day
@@ -332,6 +340,11 @@ export const PEER_COLOR_BG_OPACITY = '1a';
 export const PEER_COLOR_BG_ACTIVE_OPACITY = '2b';
 export const PEER_COLOR_GRADIENT_STEP = 5; // px
 export const MAX_UPLOAD_FILEPART_SIZE = 524288;
+export const MAX_UNIQUE_REACTIONS = 11;
+
+export const IGNORE_UNHANDLED_ERRORS = new Set([
+  'USER_CANCELED',
+]);
 
 // Group calls
 export const GROUP_CALL_VOLUME_MULTIPLIER = 100;
@@ -375,6 +388,7 @@ export const PREMIUM_FEATURE_SECTIONS = [
   'saved_tags',
   'last_seen',
   'message_privacy',
+  'effects',
 ] as const;
 
 export const PREMIUM_BOTTOM_VIDEOS: ApiPremiumSection[] = [
@@ -389,6 +403,7 @@ export const PREMIUM_BOTTOM_VIDEOS: ApiPremiumSection[] = [
   'saved_tags',
   'last_seen',
   'message_privacy',
+  'effects',
 ];
 
 export const PREMIUM_LIMITS_ORDER: ApiLimitTypeForPromo[] = [

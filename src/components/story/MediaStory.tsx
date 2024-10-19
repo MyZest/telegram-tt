@@ -8,17 +8,16 @@ import type { ApiStory, ApiTypeStory } from '../../api/types';
 import { getStoryMediaHash } from '../../global/helpers';
 import { selectChat, selectPinnedStories } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
-import { formatMediaDuration } from '../../util/date/dateFormat';
+import { formatMediaDuration } from '../../util/dates/dateFormat';
 import stopEvent from '../../util/stopEvent';
 import { preventMessageInputBlurWithBubbling } from '../middle/helpers/preventMessageInputBlur';
 
 import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
-import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useMedia from '../../hooks/useMedia';
-import useMenuPosition from '../../hooks/useMenuPosition';
+import useOldLang from '../../hooks/useOldLang';
 
-import Icon from '../common/Icon';
+import Icon from '../common/icons/Icon';
 import Menu from '../ui/Menu';
 import MenuItem from '../ui/MenuItem';
 import MediaAreaOverlay from './mediaArea/MediaAreaOverlay';
@@ -47,7 +46,7 @@ function MediaStory({
     showNotification,
   } = getActions();
 
-  const lang = useLang();
+  const lang = useOldLang();
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -73,19 +72,10 @@ function MediaStory({
   }, [isDeleted, isFullyLoaded, story]);
 
   const {
-    isContextMenuOpen, contextMenuPosition,
+    isContextMenuOpen, contextMenuAnchor,
     handleBeforeContextMenu, handleContextMenu,
     handleContextMenuClose, handleContextMenuHide,
   } = useContextMenuHandlers(containerRef, !isOwn);
-  const {
-    positionX, positionY, transformOriginX, transformOriginY, style: menuStyle,
-  } = useMenuPosition(
-    contextMenuPosition,
-    getTriggerElement,
-    getRootElement,
-    getMenuElement,
-    getLayout,
-  );
 
   const handleClick = useCallback(() => {
     openStoryViewer({
@@ -124,6 +114,7 @@ function MediaStory({
 
   const handleTogglePinned = useLastCallback(() => {
     toggleStoryPinnedToTop({ peerId, storyId: story.id });
+    handleContextMenuClose();
   });
 
   return (
@@ -155,14 +146,14 @@ function MediaStory({
         {isFullyLoaded && <MediaAreaOverlay story={story} />}
         {isProtected && <span className="protector" />}
       </div>
-      {contextMenuPosition !== undefined && (
+      {contextMenuAnchor !== undefined && (
         <Menu
           isOpen={isContextMenuOpen}
-          transformOriginX={transformOriginX}
-          transformOriginY={transformOriginY}
-          positionX={positionX}
-          positionY={positionY}
-          style={menuStyle}
+          anchor={contextMenuAnchor}
+          getTriggerElement={getTriggerElement}
+          getRootElement={getRootElement}
+          getMenuElement={getMenuElement}
+          getLayout={getLayout}
           className={buildClassName(styles.contextMenu, 'story-context-menu')}
           autoClose
           onClose={handleContextMenuClose}

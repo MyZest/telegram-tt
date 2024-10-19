@@ -1,7 +1,7 @@
 .WebPage {
   margin-top: 0.25rem;
   margin-bottom: 0.125rem;
-  padding: 0.375rem;
+  padding: 0.1875rem;
   font-size: calc(var(--message-text-size, 1rem) - 0.125rem);
   line-height: 1.125rem;
   max-width: 29rem;
@@ -49,6 +49,13 @@
     margin: 0;
     padding: 0.125rem 0.25rem 0.125rem 0.625rem;
     transition: background-color 0.2s ease-in;
+
+    &.interactive {
+      cursor: var(--custom-cursor, pointer);
+      &:active {
+        background-color: var(--background-active-color);
+      }
+    }
   }
 
   &::before {
@@ -122,11 +129,12 @@
       img {
         width: 100% !important;
         height: 100% !important;
+        object-fit: contain;
       }
     }
   }
 
-  .message-content:not(.has-reactions) & {
+  .message-content:not(.has-reactions):not(.is-inverted-media) & {
     margin-bottom: calc(var(--message-meta-height)) !important;
   }
 
@@ -182,11 +190,15 @@
 
   .site-description {
     line-height: 1.25;
-    margin-bottom: 0;
+    margin-bottom: 0.125rem;
 
     body.is-ios & {
       line-height: 1.125rem;
     }
+  }
+
+  .File .file-preview {
+    margin-inline-end: 0.75rem !important;
   }
 
   @media (min-width: 1921px) {

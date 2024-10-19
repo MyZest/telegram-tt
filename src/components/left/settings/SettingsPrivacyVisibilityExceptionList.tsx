@@ -18,9 +18,9 @@ import { getPrivacyKey } from './helpers/privacy';
 
 import { useFolderManagerForOrderedIds } from '../../../hooks/useFolderManager';
 import useHistoryBack from '../../../hooks/useHistoryBack';
-import useLang from '../../../hooks/useLang';
+import useOldLang from '../../../hooks/useOldLang';
 
-import Picker from '../../common/Picker';
+import PeerPicker from '../../common/pickers/PeerPicker';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 
 export type OwnProps = {
@@ -51,7 +51,7 @@ const SettingsPrivacyVisibilityExceptionList: FC<OwnProps & StateProps> = ({
 }) => {
   const { setPrivacySettings } = getActions();
 
-  const lang = useLang();
+  const lang = useOldLang();
 
   const selectedContactIds = useMemo(() => {
     if (!settings) {
@@ -139,18 +139,23 @@ const SettingsPrivacyVisibilityExceptionList: FC<OwnProps & StateProps> = ({
 
   return (
     <div className="NewChat-inner step-1">
-      <Picker
+      <PeerPicker
         categories={withPremiumCategory ? PREMIUM_CATEGORY : undefined}
         itemIds={displayedIds || []}
         selectedIds={newSelectedContactIds}
         selectedCategories={newSelectedCategoryTypes}
         filterValue={searchQuery}
         filterPlaceholder={isAllowList ? lang('AlwaysAllowPlaceholder') : lang('NeverAllowPlaceholder')}
+        categoryPlaceholderKey="PrivacyUserTypes"
         searchInputId="new-group-picker-search"
         isSearchable
         onSelectedIdsChange={handleSelectedContactIdsChange}
         onSelectedCategoriesChange={handleSelectedCategoriesChange}
         onFilterChange={setSearchQuery}
+        allowMultiple
+        itemInputType="checkbox"
+        withDefaultPadding
+        withStatus
       />
 
       <FloatingActionButton

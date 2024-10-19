@@ -12,6 +12,7 @@
   $bm-red: color.red($foreground) * $opacity + color.red($background) * $background-opacity * (1 - $opacity);
   $bm-green: color.green($foreground) * $opacity + color.green($background) * $background-opacity * (1 - $opacity);
   $bm-blue: color.blue($foreground) * $opacity + color.blue($background) * $background-opacity * (1 - $opacity);
+
   @return rgb($bm-red, $bm-green, $bm-blue);
 }
 
@@ -44,6 +45,7 @@ $color-text-meta-apple: #8c8c91;
 $color-borders: #dadce0;
 $color-dividers: #c8c6cc;
 $color-dividers-android: #E7E7E7;
+$color-item-hover: #f4f4f5;
 $color-item-active: #ededed;
 $color-chat-hover: #f4f4f5;
 $color-chat-active: #3390ec;
@@ -108,6 +110,7 @@ $color-message-story-mention-to: #74bcff;
   --color-primary-tint: rgba(var(--color-primary), 0.1);
   --color-green: #{$color-green};
   --color-green-darker: #{color.mix($color-green, $color-black, 84%)};
+  --color-success: #{$color-green};
 
   --color-error: #{$color-error};
   --color-error-shade: #{color.mix($color-error, $color-black, 92%)};
@@ -162,6 +165,7 @@ $color-message-story-mention-to: #74bcff;
   --color-chat-username: #3C7EB0;
   --color-chat-hover: #{$color-chat-hover};
   --color-chat-active: #{$color-chat-active};
+  --color-item-hover: #{$color-item-hover};
   --color-item-active: #{$color-item-active};
 
   --color-selection-highlight: #{$color-selection};
@@ -244,16 +248,18 @@ $color-message-story-mention-to: #74bcff;
   --z-modal: 1510;
   --z-modal-menu: 1600;
   --z-media-viewer: 1500;
+  --z-modal-low-priority: 1400;
   --z-video-player-controls: 3;
   --z-drop-area: 55;
   --z-animation-fade: 50;
   --z-menu-bubble: 21;
   --z-menu-backdrop: 20;
+  --z-message-effect: 15;
   --z-message-highlighted: 14;
   --z-forum-panel: 13;
   --z-message-context-menu: 13;
   --z-scroll-down-button: 12;
-  --z-mobile-search: 12;
+  --z-local-search: 12;
   --z-left-header: 11;
   --z-middle-header: 11;
   --z-middle-footer: 11;
@@ -295,6 +301,8 @@ $color-message-story-mention-to: #74bcff;
   --safe-area-right: env(safe-area-inset-right);
   --safe-area-bottom: env(safe-area-inset-bottom);
   --safe-area-left: env(safe-area-inset-left);
+
+  --picker-title-shift: 1rem;
 
   body.is-ios {
     --layer-transition: 650ms cubic-bezier(0.22, 1, 0.36, 1);

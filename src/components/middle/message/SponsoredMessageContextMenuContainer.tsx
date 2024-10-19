@@ -9,7 +9,7 @@ import buildClassName from '../../../util/buildClassName';
 
 import useFlag from '../../../hooks/useFlag';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useShowTransition from '../../../hooks/useShowTransition';
+import useShowTransitionDeprecated from '../../../hooks/useShowTransitionDeprecated';
 
 import MessageContextMenu from './MessageContextMenu';
 
@@ -17,7 +17,7 @@ export type OwnProps = {
   isOpen: boolean;
   message: ApiSponsoredMessage;
   anchor: IAnchorPosition;
-  onAboutAds: NoneToVoidFunction;
+  onAboutAdsClick: NoneToVoidFunction;
   onReportAd: NoneToVoidFunction;
   onClose: NoneToVoidFunction;
   onCloseAnimationEnd: NoneToVoidFunction;
@@ -26,7 +26,7 @@ export type OwnProps = {
 const SponsoredMessageContextMenuContainer: FC<OwnProps> = ({
   message,
   anchor,
-  onAboutAds,
+  onAboutAdsClick,
   onReportAd,
   onClose,
   onCloseAnimationEnd,
@@ -34,10 +34,10 @@ const SponsoredMessageContextMenuContainer: FC<OwnProps> = ({
   const { openPremiumModal, showDialog } = getActions();
 
   const [isMenuOpen, , closeMenu] = useFlag(true);
-  const { transitionClassNames } = useShowTransition(isMenuOpen, onCloseAnimationEnd, undefined, false);
+  const { transitionClassNames } = useShowTransitionDeprecated(isMenuOpen, onCloseAnimationEnd, undefined, false);
 
   const handleAboutAdsOpen = useLastCallback(() => {
-    onAboutAds();
+    onAboutAdsClick();
     closeMenu();
   });
 
@@ -73,7 +73,7 @@ const SponsoredMessageContextMenuContainer: FC<OwnProps> = ({
         message={message}
         onClose={closeMenu}
         onCloseAnimationEnd={closeMenu}
-        onAboutAds={handleAboutAdsOpen}
+        onAboutAdsClick={handleAboutAdsOpen}
         onSponsoredHide={handleSponsoredHide}
         onSponsorInfo={handleSponsorInfo}
         onSponsoredReport={handleReportSponsoredMessage}

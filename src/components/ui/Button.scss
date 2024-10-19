@@ -5,6 +5,7 @@
     &:focus {
       @content;
     }
+
     @media (hover: hover) {
       &:hover {
         @content;
@@ -38,12 +39,12 @@
   color: white;
   line-height: 1.2;
   cursor: var(--custom-cursor, pointer);
-  text-transform: uppercase;
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
   transition: background-color 0.15s, color 0.15s;
   text-decoration: none !important;
+  text-transform: uppercase;
 
   --premium-gradient: linear-gradient(88.39deg, #6C93FF -2.56%, #976FFF 51.27%, #DF69D1 107.39%);
 
@@ -52,6 +53,10 @@
   &.clicked,
   body.no-page-transitions & {
     transition: none !important;
+  }
+
+  &.no-upper-case {
+    text-transform: none;
   }
 
   &.disabled {
@@ -63,15 +68,6 @@
 
     &:not(.click-allowed) {
       pointer-events: none;
-    }
-  }
-
-  &.round {
-    width: 3.5rem;
-    border-radius: 50%;
-
-    .icon {
-      font-size: 1.5rem;
     }
   }
 
@@ -349,6 +345,15 @@
       border-radius: 1rem;
       padding: 0.3125rem 1rem;
       font-size: 1rem;
+    }
+  }
+
+  &.round {
+    width: 3.5rem;
+    border-radius: 50%;
+
+    .icon {
+      font-size: 1.5rem;
     }
   }
 

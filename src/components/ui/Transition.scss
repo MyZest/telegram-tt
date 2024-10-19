@@ -33,12 +33,6 @@
   &-slideOptimizedRtlBackwards {
     contain: strict;
 
-    body.is-safari & {
-      // Create a new composite layer to reduce the page repaint area when switching a tab
-      // Consider experimenting with `contain` when browser support is better
-      transform: translate3d(0, 0, 0);
-    }
-
     #root & > .Transition_slide {
       position: absolute;
       top: 0;

@@ -4,8 +4,8 @@ import type { ActionReturnType, GlobalState } from '../../types';
 
 import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import { setLanguage } from '../../../util/langProvider';
 import { subscribe, unsubscribe } from '../../../util/notifications';
+import { oldSetLanguage } from '../../../util/oldLangProvider';
 import { decryptSessionByCurrentHash } from '../../../util/passcode';
 import { applyPerformanceSettings } from '../../../util/perfomanceSettings';
 import { hasStoredSession, storeSession } from '../../../util/sessions';
@@ -32,7 +32,7 @@ setSystemThemeChangeCallback((theme) => {
   // eslint-disable-next-line eslint-multitab-tt/no-immediate-global
   let global = getGlobal();
 
-  if (!global.settings.byKey.shouldUseSystemTheme) return;
+  if (!global.isInited || !global.settings.byKey.shouldUseSystemTheme) return;
 
   global = replaceSettings(global, { theme });
   setGlobal(global);
@@ -134,7 +134,7 @@ addCallback((global: GlobalState) => {
 
   const performanceType = selectPerformanceSettings(global);
 
-  void setLanguage(language, undefined, true);
+  void oldSetLanguage(language, undefined, true);
 
   requestMutation(() => {
     document.documentElement.style.setProperty(

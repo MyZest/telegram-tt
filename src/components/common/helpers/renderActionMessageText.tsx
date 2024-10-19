@@ -4,17 +4,18 @@ import type {
   ApiChat, ApiGroupCall, ApiMessage, ApiTopic, ApiUser,
 } from '../../../api/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
-import type { LangFn } from '../../../hooks/useLang';
+import type { LangFn } from '../../../hooks/useOldLang';
 import type { TextPart } from '../../../types';
 
+import { SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
 import {
   getChatTitle,
   getExpiredMessageDescription,
-  getMessageSummaryText,
   getUserFullName,
   isExpiredMessage,
 } from '../../../global/helpers';
-import { formatCurrency } from '../../../util/formatCurrency';
+import { getMessageSummaryText } from '../../../global/helpers/messageSummary';
+import { formatCurrencyAsString } from '../../../util/formatCurrency';
 import trimText from '../../../util/trimText';
 import renderText from './renderText';
 
@@ -79,14 +80,33 @@ export function renderActionMessageText(
       .replace('un2', '%gift_payment_amount%')
       .replace(/\*\*/g, '');
   }
+  if (translationKey === 'ActionRefunded') {
+    unprocessed = unprocessed
+      .replace('un1', '%action_origin%')
+      .replace('%1$s', '%gift_payment_amount%');
+  }
+  if (translationKey === 'ActionRequestedPeer') {
+    unprocessed = unprocessed
+      .replace('un1', '%star_target_user%')
+      .replace('un2', '%action_origin%')
+      .replace(/\*\*/g, '');
+  }
+  if (translationKey === 'BoostingReceivedPrizeFrom') {
+    unprocessed = unprocessed
+      .replace('**%s**', '%target_chat%')
+      .replace(/\*\*/g, '');
+  }
   let processed: TextPart[];
 
-  if (unprocessed.includes('%payment_amount%')) {
+  if (unprocessed.includes('%star_target_user%')) {
     processed = processPlaceholder(
       unprocessed,
-      '%payment_amount%',
-      formatCurrency(amount!, currency!, lang.code),
+      '%star_target_user%',
+      targetUsers
+        ? targetUsers.map((user) => renderUserContent(user, noLinks)).filter(Boolean)
+        : 'User',
     );
+
     unprocessed = processed.pop() as string;
     content.push(...processed);
   }
@@ -95,7 +115,9 @@ export function renderActionMessageText(
     unprocessed,
     '%action_origin%',
     actionOriginUser ? (
-      renderUserContent(actionOriginUser, noLinks) || NBSP
+      actionOriginUser.id === SERVICE_NOTIFICATIONS_USER_ID
+        ? lang('StarsTransactionUnknown')
+        : renderUserContent(actionOriginUser, noLinks) || NBSP
     ) : actionOriginChat ? (
       renderChatContent(lang, actionOriginChat, noLinks) || NBSP
     ) : 'User',
@@ -105,9 +127,19 @@ export function renderActionMessageText(
   unprocessed = processed.pop() as string;
   content.push(...processed);
 
+  if (unprocessed.includes('%payment_amount%')) {
+    processed = processPlaceholder(
+      unprocessed,
+      '%payment_amount%',
+      formatCurrencyAsString(amount!, currency!, lang.code),
+    );
+    unprocessed = processed.pop() as string;
+    content.push(...processed);
+  }
+
   if (unprocessed.includes('%action_topic%')) {
     const topicEmoji = topic?.iconEmojiId
-      ? <CustomEmoji documentId={topic.iconEmojiId} />
+      ? <CustomEmoji documentId={topic.iconEmojiId} isSelectable />
       : '';
     const topicString = topic ? `${topic.title}` : 'a topic';
     processed = processPlaceholder(
@@ -126,7 +158,7 @@ export function renderActionMessageText(
     processed = processPlaceholder(
       unprocessed,
       '%action_topic_icon%',
-      hasIcon ? <CustomEmoji documentId={topicIcon!} />
+      hasIcon ? <CustomEmoji documentId={topicIcon!} isSelectable />
         : topic ? <TopicDefaultIcon topicId={topic!.id} title={topic!.title} /> : '...',
     );
     unprocessed = processed.pop() as string;
@@ -134,11 +166,11 @@ export function renderActionMessageText(
   }
 
   if (unprocessed.includes('%gift_payment_amount%')) {
-    const price = formatCurrency(amount!, currency!, lang.code);
+    const price = formatCurrencyAsString(amount!, currency!, lang.code);
     let priceText = price;
 
     if (giftCryptoInfo) {
-      const cryptoPrice = formatCurrency(giftCryptoInfo.amount, giftCryptoInfo.currency, lang.code);
+      const cryptoPrice = formatCurrencyAsString(giftCryptoInfo.amount, giftCryptoInfo.currency, lang.code);
       priceText = `${cryptoPrice} (${price})`;
     }
 
@@ -249,7 +281,6 @@ function renderMessageContent(
 
   const messageSummary = (
     <MessageSummary
-      lang={lang}
       message={message}
       truncateLength={MAX_LENGTH}
       observeIntersectionForLoading={observeIntersectionForLoading}

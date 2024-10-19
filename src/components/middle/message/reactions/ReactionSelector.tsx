@@ -12,8 +12,8 @@ import {
 } from '../../../../global/helpers';
 import buildClassName, { createClassNameBuilder } from '../../../../util/buildClassName';
 
-import useLang from '../../../../hooks/useLang';
 import useLastCallback from '../../../../hooks/useLastCallback';
+import useOldLang from '../../../../hooks/useOldLang';
 
 import Button from '../../../ui/Button';
 import Link from '../../../ui/Link';
@@ -27,9 +27,10 @@ type OwnProps = {
   isPrivate?: boolean;
   topReactions?: ApiReaction[];
   defaultTagReactions?: ApiReaction[];
+  effectReactions?: ApiReaction[];
   allAvailableReactions?: ApiAvailableReaction[];
   currentReactions?: ApiReactionCount[];
-  maxUniqueReactions?: number;
+  reactionsLimit?: number;
   isReady?: boolean;
   canBuyPremium?: boolean;
   isCurrentUserPremium?: boolean;
@@ -37,6 +38,7 @@ type OwnProps = {
   className?: string;
   isInSavedMessages?: boolean;
   isInStoryViewer?: boolean;
+  isForEffects?: boolean;
   onClose?: NoneToVoidFunction;
   onToggleReaction: (reaction: ApiReaction) => void;
   onShowMore: (position: IAnchorPosition) => void;
@@ -52,7 +54,7 @@ const ReactionSelector: FC<OwnProps> = ({
   defaultTagReactions,
   enabledReactions,
   currentReactions,
-  maxUniqueReactions,
+  reactionsLimit,
   isPrivate,
   isReady,
   canPlayAnimatedEmojis,
@@ -60,6 +62,8 @@ const ReactionSelector: FC<OwnProps> = ({
   isCurrentUserPremium,
   isInSavedMessages,
   isInStoryViewer,
+  isForEffects,
+  effectReactions,
   onClose,
   onToggleReaction,
   onShowMore,
@@ -67,25 +71,32 @@ const ReactionSelector: FC<OwnProps> = ({
   const { openPremiumModal } = getActions();
   // eslint-disable-next-line no-null/no-null
   const ref = useRef<HTMLDivElement>(null);
-  const lang = useLang();
+  const lang = useOldLang();
 
   const areReactionsLocked = isInSavedMessages && !isCurrentUserPremium && !isInStoryViewer;
 
+  const shouldUseCurrentReactions = Boolean(reactionsLimit
+    && currentReactions && currentReactions.length >= reactionsLimit);
+
   const availableReactions = useMemo(() => {
-    const reactions = isInSavedMessages ? defaultTagReactions
-      : (enabledReactions?.type === 'some' ? enabledReactions.allowed
-        : allAvailableReactions?.map((reaction) => reaction.reaction));
+    const reactions = (() => {
+      if (shouldUseCurrentReactions) return currentReactions?.map((reaction) => reaction.reaction);
+      if (isForEffects) return effectReactions;
+      if (isInSavedMessages) return defaultTagReactions;
+      if (enabledReactions?.type === 'some') return enabledReactions.allowed;
+      return allAvailableReactions?.map((reaction) => reaction.reaction);
+    })();
+
     const filteredReactions = reactions?.map((reaction) => {
       const isCustomReaction = 'documentId' in reaction;
       const availableReaction = allAvailableReactions?.find((r) => isSameReaction(r.reaction, reaction));
+
+      if (isForEffects) return availableReaction;
+
       if ((!isCustomReaction && !availableReaction) || availableReaction?.isInactive) return undefined;
 
-      if (!isPrivate && (!enabledReactions || !canSendReaction(reaction, enabledReactions))) {
-        return undefined;
-      }
-
-      if (maxUniqueReactions && currentReactions && currentReactions.length >= maxUniqueReactions
-        && !currentReactions.some(({ reaction: currentReaction }) => isSameReaction(reaction, currentReaction))) {
+      if (!isPrivate && !shouldUseCurrentReactions
+         && (!enabledReactions || !canSendReaction(reaction, enabledReactions))) {
         return undefined;
       }
 
@@ -95,7 +106,8 @@ const ReactionSelector: FC<OwnProps> = ({
     return sortReactions(filteredReactions, topReactions);
   }, [
     allAvailableReactions, currentReactions, defaultTagReactions, enabledReactions, isInSavedMessages, isPrivate,
-    maxUniqueReactions, topReactions,
+    topReactions, isForEffects, effectReactions, shouldUseCurrentReactions,
+
   ]);
 
   const reactionsToRender = useMemo(() => {
@@ -151,13 +163,17 @@ const ReactionSelector: FC<OwnProps> = ({
       return lang('StoryReactionsHint');
     }
 
+    if (isForEffects) {
+      return lang('AddEffectMessageHint');
+    }
+
     return undefined;
-  }, [isCurrentUserPremium, isInSavedMessages, isInStoryViewer, lang]);
+  }, [isCurrentUserPremium, isInSavedMessages, isInStoryViewer, lang, isForEffects]);
 
   if (!reactionsToRender.length) return undefined;
 
   return (
-    <div className={buildClassName(cn('&', lang.isRtl && 'isRtl'), className)} ref={ref}>
+    <div className={buildClassName(cn('&'), className)} ref={ref}>
       <div className={cn('bubble-small', lang.isRtl && 'isRtl')} />
       <div className={cn('items-wrapper')}>
         <div className={cn('bubble-big', lang.isRtl && 'isRtl')} />

@@ -18,9 +18,9 @@ import buildClassName from '../../util/buildClassName';
 import captureKeyboardListeners from '../../util/captureKeyboardListeners';
 
 import useFlag from '../../hooks/useFlag';
-import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
-import usePrevious from '../../hooks/usePrevious';
+import useOldLang from '../../hooks/useOldLang';
+import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import useCopySelectedMessages from './hooks/useCopySelectedMessages';
 
 import ReportModal from '../common/ReportModal';
@@ -68,7 +68,7 @@ const MessageSelectToolbar: FC<OwnProps & StateProps> = ({
     copySelectedMessages,
     showNotification,
   } = getActions();
-  const lang = useLang();
+  const lang = useOldLang();
 
   const [isDeleteModalOpen, openDeleteModal, closeDeleteModal] = useFlag();
   const [isReportModalOpen, openReportModal, closeReportModal] = useFlag();
@@ -105,7 +105,7 @@ const MessageSelectToolbar: FC<OwnProps & StateProps> = ({
     exitMessageSelectMode();
   });
 
-  const prevSelectedMessagesCount = usePrevious(selectedMessagesCount || undefined, true);
+  const prevSelectedMessagesCount = usePreviousDeprecated(selectedMessagesCount || undefined, true);
   const renderingSelectedMessagesCount = isActive ? selectedMessagesCount : prevSelectedMessagesCount;
 
   const formattedMessagesCount = lang('VoiceOver.Chat.MessagesSelected', renderingSelectedMessagesCount, 'i');
@@ -174,11 +174,13 @@ const MessageSelectToolbar: FC<OwnProps & StateProps> = ({
           </div>
         )}
       </div>
-      <DeleteSelectedMessageModal
-        isOpen={isDeleteModalOpen}
-        isSchedule={isSchedule}
-        onClose={closeDeleteModal}
-      />
+      {canDeleteMessages && (
+        <DeleteSelectedMessageModal
+          isOpen={isDeleteModalOpen}
+          isSchedule={isSchedule}
+          onClose={closeDeleteModal}
+        />
+      )}
       <ReportModal
         isOpen={isReportModalOpen}
         onClose={closeReportModal}
@@ -199,8 +201,8 @@ export default memo(withGlobal<OwnProps>(
     const { messageIds: selectedMessageIds } = tabState.selectedMessages || {};
     const hasProtectedMessage = chatId ? selectHasProtectedMessage(global, chatId, selectedMessageIds) : false;
     const canForward = !isSchedule && chatId ? selectCanForwardMessages(global, chatId, selectedMessageIds) : false;
-    const isForwardModalOpen = tabState.forwardMessages.isModalShown;
-    const isAnyModalOpen = Boolean(isForwardModalOpen || tabState.requestedDraft
+    const isShareMessageModalOpen = tabState.isShareMessageModalShown;
+    const isAnyModalOpen = Boolean(isShareMessageModalOpen || tabState.requestedDraft
       || tabState.requestedAttachBotInChat || tabState.requestedAttachBotInstall);
 
     return {

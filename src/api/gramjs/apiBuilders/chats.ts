@@ -24,7 +24,7 @@ import type {
 import { omitUndefined, pick, pickTruthy } from '../../../util/iteratees';
 import { getServerTime, getServerTimeOffset } from '../../../util/serverTime';
 import { serializeBytes } from '../helpers';
-import { buildApiUsernames } from './common';
+import { buildApiUsernames, buildAvatarPhotoId } from './common';
 import { omitVirtualClassFields } from './helpers';
 import {
   buildApiEmojiStatus,
@@ -50,8 +50,8 @@ function buildApiChatFieldsFromPeerEntity(
   const accessHash = ('accessHash' in peerEntity) ? String(peerEntity.accessHash) : undefined;
   const hasVideoAvatar = 'photo' in peerEntity && peerEntity.photo && 'hasVideo' in peerEntity.photo
     && peerEntity.photo.hasVideo;
-  const avatarHash = ('photo' in peerEntity) && peerEntity.photo ? buildAvatarHash(peerEntity.photo) : undefined;
-  const isSignaturesShown = Boolean('signatures' in peerEntity && peerEntity.signatures);
+  const avatarPhotoId = ('photo' in peerEntity) && peerEntity.photo ? buildAvatarPhotoId(peerEntity.photo) : undefined;
+  const areSignaturesShown = Boolean('signatures' in peerEntity && peerEntity.signatures);
   const hasPrivateLink = Boolean('hasLink' in peerEntity && peerEntity.hasLink);
   const isScam = Boolean('scam' in peerEntity && peerEntity.scam);
   const isFake = Boolean('fake' in peerEntity && peerEntity.fake);
@@ -66,15 +66,17 @@ function buildApiChatFieldsFromPeerEntity(
   const emojiStatus = ('emojiStatus' in peerEntity && peerEntity.emojiStatus)
     ? buildApiEmojiStatus(peerEntity.emojiStatus) : undefined;
   const boostLevel = ('level' in peerEntity) ? peerEntity.level : undefined;
+  const areProfilesShown = Boolean('signatureProfiles' in peerEntity && peerEntity.signatureProfiles);
 
   return omitUndefined<PeerEntityApiChatFields>({
     isMin,
     hasPrivateLink,
-    isSignaturesShown,
+    areSignaturesShown,
+    areProfilesShown,
     usernames,
     accessHash,
     hasVideoAvatar,
-    avatarHash,
+    avatarPhotoId,
     ...('verified' in peerEntity && { isVerified: peerEntity.verified }),
     ...('callActive' in peerEntity && { isCallActive: peerEntity.callActive }),
     ...('callNotEmpty' in peerEntity && { isCallNotEmpty: peerEntity.callNotEmpty }),
@@ -308,14 +310,6 @@ function getUserName(user: GramJs.User) {
     : (user.lastName || '');
 }
 
-export function buildAvatarHash(photo: GramJs.TypeUserProfilePhoto | GramJs.TypeChatPhoto) {
-  if ('photoId' in photo) {
-    return String(photo.photoId);
-  }
-
-  return undefined;
-}
-
 export function buildChatMember(
   member: GramJs.TypeChatParticipant | GramJs.TypeChannelParticipant,
 ): ApiChatMember | undefined {
@@ -336,6 +330,7 @@ export function buildChatMember(
     bannedRights: 'bannedRights' in member ? omitVirtualClassFields(member.bannedRights) : undefined,
     adminRights: 'adminRights' in member ? omitVirtualClassFields(member.adminRights) : undefined,
     customTitle: 'rank' in member ? member.rank : undefined,
+    isViaRequest: 'viaRequest' in member ? member.viaRequest : undefined,
     ...((member instanceof GramJs.ChannelParticipantAdmin || member instanceof GramJs.ChatParticipantAdmin) && {
       isAdmin: true,
     }),

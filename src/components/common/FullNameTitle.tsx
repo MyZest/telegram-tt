@@ -3,26 +3,26 @@ import React, { memo, useMemo } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import type {
-  ApiChat, ApiPeer, ApiUser,
+  ApiPeer,
 } from '../../api/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { CustomPeer } from '../../types';
 
 import { EMOJI_STATUS_LOOP_LIMIT } from '../../config';
 import {
-  getChatTitle, getUserFullName, isAnonymousForwardsChat, isChatWithRepliesBot, isUserId,
+  getChatTitle, getUserFullName, isAnonymousForwardsChat, isChatWithRepliesBot, isPeerUser,
 } from '../../global/helpers';
 import buildClassName from '../../util/buildClassName';
 import { copyTextToClipboard } from '../../util/clipboard';
 import stopEvent from '../../util/stopEvent';
 import renderText from './helpers/renderText';
 
-import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
+import useOldLang from '../../hooks/useOldLang';
 
 import CustomEmoji from './CustomEmoji';
 import FakeIcon from './FakeIcon';
-import PremiumIcon from './PremiumIcon';
+import StarIcon from './icons/StarIcon';
 import VerifiedIcon from './VerifiedIcon';
 
 import styles from './FullNameTitle.module.scss';
@@ -38,9 +38,10 @@ type OwnProps = {
   isSavedDialog?: boolean;
   noLoopLimit?: boolean;
   canCopyTitle?: boolean;
+  iconElement?: React.ReactNode;
+  allowMultiLine?: boolean;
   onEmojiStatusClick?: NoneToVoidFunction;
   observeIntersection?: ObserveFn;
-  iconElement?: React.ReactNode;
 };
 
 const FullNameTitle: FC<OwnProps> = ({
@@ -54,17 +55,18 @@ const FullNameTitle: FC<OwnProps> = ({
   isSavedDialog,
   noLoopLimit,
   canCopyTitle,
+  iconElement,
+  allowMultiLine,
   onEmojiStatusClick,
   observeIntersection,
-  iconElement,
 }) => {
-  const lang = useLang();
+  const lang = useOldLang();
   const { showNotification } = getActions();
   const realPeer = 'id' in peer ? peer : undefined;
   const customPeer = 'isCustomPeer' in peer ? peer : undefined;
-  const isUser = realPeer && isUserId(realPeer.id);
-  const title = realPeer && (isUser ? getUserFullName(realPeer as ApiUser) : getChatTitle(lang, realPeer as ApiChat));
-  const isPremium = isUser && (peer as ApiUser).isPremium;
+  const isUser = realPeer && isPeerUser(realPeer);
+  const title = realPeer && (isUser ? getUserFullName(realPeer) : getChatTitle(lang, realPeer));
+  const isPremium = isUser && realPeer.isPremium;
 
   const handleTitleClick = useLastCallback((e) => {
     if (!title || !canCopyTitle) {
@@ -78,7 +80,7 @@ const FullNameTitle: FC<OwnProps> = ({
 
   const specialTitle = useMemo(() => {
     if (customPeer) {
-      return lang(customPeer.titleKey);
+      return lang(customPeer.titleKey, customPeer.titleValue, 'i');
     }
 
     if (isSavedMessages) {
@@ -99,7 +101,9 @@ const FullNameTitle: FC<OwnProps> = ({
   if (specialTitle) {
     return (
       <div className={buildClassName('title', styles.root, className)}>
-        <h3>{specialTitle}</h3>
+        <h3 className={buildClassName('fullName', styles.fullName, !allowMultiLine && styles.ellipsis)}>
+          {specialTitle}
+        </h3>
       </div>
     );
   }
@@ -109,7 +113,12 @@ const FullNameTitle: FC<OwnProps> = ({
       <h3
         dir="auto"
         role="button"
-        className={buildClassName('fullName', styles.fullName, canCopyTitle && styles.canCopy)}
+        className={buildClassName(
+          'fullName',
+          styles.fullName,
+          !allowMultiLine && styles.ellipsis,
+          canCopyTitle && styles.canCopy,
+        )}
         onClick={handleTitleClick}
       >
         {renderText(title || '')}
@@ -127,7 +136,7 @@ const FullNameTitle: FC<OwnProps> = ({
               onClick={onEmojiStatusClick}
             />
           )}
-          {withEmojiStatus && !realPeer?.emojiStatus && isPremium && <PremiumIcon />}
+          {withEmojiStatus && !realPeer?.emojiStatus && isPremium && <StarIcon />}
         </>
       )}
       {iconElement}

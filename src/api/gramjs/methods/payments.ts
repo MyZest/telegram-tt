@@ -3,10 +3,10 @@ import { Api as GramJs } from '../../../lib/gramjs';
 
 import type {
   ApiChat, ApiInputStorePaymentPurpose, ApiPeer, ApiRequestInputInvoice,
-  OnApiUpdate,
+  ApiThemeParameters,
 } from '../../types';
 
-import { buildApiChatFromPreview } from '../apiBuilders/chats';
+import { DEBUG } from '../../../config';
 import {
   buildApiBoost,
   buildApiBoostsStatus,
@@ -18,26 +18,24 @@ import {
   buildApiPremiumGiftCodeOption,
   buildApiPremiumPromo,
   buildApiReceipt,
+  buildApiStarsGiftOptions,
+  buildApiStarsGiveawayOptions,
+  buildApiStarsTransaction,
+  buildApiStarTopupOption,
   buildShippingOptions,
 } from '../apiBuilders/payments';
-import { buildApiUser } from '../apiBuilders/users';
 import {
-  buildInputInvoice, buildInputPeer, buildInputStorePaymentPurpose, buildShippingInfo,
+  buildInputInvoice, buildInputPeer, buildInputStorePaymentPurpose, buildInputThemeParams, buildShippingInfo,
 } from '../gramjsBuilders';
 import {
-  addEntitiesToLocalDb,
+  addWebDocumentToLocalDb,
   deserializeBytes,
   serializeBytes,
 } from '../helpers';
 import localDb from '../localDb';
+import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 import { handleGramJsUpdate, invokeRequest } from './client';
 import { getTemporaryPaymentPassword } from './twoFaSettings';
-
-let onUpdate: OnApiUpdate;
-
-export function init(_onUpdate: OnApiUpdate) {
-  onUpdate = _onUpdate;
-}
 
 export async function validateRequestedInfo({
   inputInvoice,
@@ -111,7 +109,7 @@ export async function sendPaymentForm({
   if (!result) return false;
 
   if (result instanceof GramJs.payments.PaymentVerificationNeeded) {
-    onUpdate({
+    sendApiUpdate({
       '@type': 'updatePaymentVerificationNeeded',
       url: result.url,
     });
@@ -124,9 +122,38 @@ export async function sendPaymentForm({
   return Boolean(result);
 }
 
-export async function getPaymentForm(inputInvoice: ApiRequestInputInvoice) {
+export async function sendStarPaymentForm({
+  formId,
+  inputInvoice,
+}: {
+  formId: string;
+  inputInvoice: ApiRequestInputInvoice;
+}) {
+  const result = await invokeRequest(new GramJs.payments.SendStarsForm({
+    formId: BigInt(formId),
+    invoice: buildInputInvoice(inputInvoice),
+  }));
+
+  if (!result) return false;
+
+  if (result instanceof GramJs.payments.PaymentVerificationNeeded) {
+    if (DEBUG) {
+      // eslint-disable-next-line no-console
+      console.warn('Unexpected PaymentVerificationNeeded in sendStarsForm');
+    }
+
+    return undefined;
+  } else {
+    handleGramJsUpdate(result.updates);
+  }
+
+  return Boolean(result);
+}
+
+export async function getPaymentForm(inputInvoice: ApiRequestInputInvoice, theme?: ApiThemeParameters) {
   const result = await invokeRequest(new GramJs.payments.GetPaymentForm({
     invoice: buildInputInvoice(inputInvoice),
+    themeParams: theme ? buildInputThemeParams(theme) : undefined,
   }));
 
   if (!result) {
@@ -134,16 +161,12 @@ export async function getPaymentForm(inputInvoice: ApiRequestInputInvoice) {
   }
 
   if (result.photo) {
-    localDb.webDocuments[result.photo.url] = result.photo;
+    addWebDocumentToLocalDb(result.photo);
   }
-
-  addEntitiesToLocalDb(result.users);
 
   return {
     form: buildApiPaymentForm(result),
     invoice: buildApiInvoiceFromForm(result),
-    users: result.users.map(buildApiUser).filter(Boolean),
-    botId: result.botId.toString(),
   };
 }
 
@@ -157,11 +180,8 @@ export async function getReceipt(chat: ApiChat, msgId: number) {
     return undefined;
   }
 
-  addEntitiesToLocalDb(result.users);
-
   return {
     receipt: buildApiReceipt(result),
-    users: result.users.map(buildApiUser).filter(Boolean),
   };
 }
 
@@ -169,9 +189,6 @@ export async function fetchPremiumPromo() {
   const result = await invokeRequest(new GramJs.help.GetPremiumPromo());
   if (!result) return undefined;
 
-  addEntitiesToLocalDb(result.users);
-
-  const users = result.users.map(buildApiUser).filter(Boolean);
   result.videos.forEach((video) => {
     if (video instanceof GramJs.Document) {
       localDb.documents[video.id.toString()] = video;
@@ -180,7 +197,6 @@ export async function fetchPremiumPromo() {
 
   return {
     promo: buildApiPremiumPromo(result),
-    users,
   };
 }
 
@@ -206,16 +222,9 @@ export async function fetchMyBoosts() {
 
   if (!result) return undefined;
 
-  addEntitiesToLocalDb(result.users);
-  addEntitiesToLocalDb(result.chats);
-
-  const users = result.users.map(buildApiUser).filter(Boolean);
-  const chats = result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean);
   const boosts = result.myBoosts.map(buildApiMyBoost);
 
   return {
-    users,
-    chats,
     boosts,
   };
 }
@@ -234,16 +243,9 @@ export async function applyBoost({
 
   if (!result) return undefined;
 
-  addEntitiesToLocalDb(result.users);
-  addEntitiesToLocalDb(result.chats);
-
-  const users = result.users.map(buildApiUser).filter(Boolean);
-  const chats = result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean);
   const boosts = result.myBoosts.map(buildApiMyBoost);
 
   return {
-    users,
-    chats,
     boosts,
   };
 }
@@ -286,16 +288,11 @@ export async function fetchBoostList({
     return undefined;
   }
 
-  addEntitiesToLocalDb(result.users);
-
-  const users = result.users.map(buildApiUser).filter(Boolean);
-
   const boostList = result.boosts.map(buildApiBoost);
 
   return {
     count: result.count,
     boostList,
-    users,
     nextOffset: result.nextOffset,
   };
 }
@@ -332,13 +329,8 @@ export async function checkGiftCode({
     return undefined;
   }
 
-  addEntitiesToLocalDb(result.users);
-  addEntitiesToLocalDb(result.chats);
-
   return {
     code: buildApiCheckedGiftCode(result),
-    users: result.users.map(buildApiUser).filter(Boolean),
-    chats: result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean),
   };
 }
 
@@ -370,6 +362,32 @@ export async function getPremiumGiftCodeOptions({
   return result.map(buildApiPremiumGiftCodeOption);
 }
 
+export async function getStarsGiftOptions({
+  chat,
+}: {
+  chat?: ApiChat;
+}) {
+  const result = await invokeRequest(new GramJs.payments.GetStarsGiftOptions({
+    userId: chat && buildInputPeer(chat.id, chat.accessHash),
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  return result.map(buildApiStarsGiftOptions);
+}
+
+export async function fetchStarsGiveawayOptions() {
+  const result = await invokeRequest(new GramJs.payments.GetStarsGiveawayOptions());
+
+  if (!result) {
+    return undefined;
+  }
+
+  return result.map(buildApiStarsGiveawayOptions);
+}
+
 export function launchPrepaidGiveaway({
   chat,
   giveawayId,
@@ -386,4 +404,83 @@ export function launchPrepaidGiveaway({
   }), {
     shouldReturnTrue: true,
   });
+}
+
+export async function fetchStarsStatus() {
+  const result = await invokeRequest(new GramJs.payments.GetStarsStatus({
+    peer: new GramJs.InputPeerSelf(),
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  return {
+    nextOffset: result.nextOffset,
+    history: result.history?.map(buildApiStarsTransaction),
+    balance: result.balance.toJSNumber(),
+  };
+}
+
+export async function fetchStarsTransactions({
+  peer,
+  offset,
+  isInbound,
+  isOutbound,
+}: {
+  peer?: ApiPeer;
+  offset?: string;
+  isInbound?: true;
+  isOutbound?: true;
+}) {
+  const inputPeer = peer ? buildInputPeer(peer.id, peer.accessHash) : new GramJs.InputPeerSelf();
+  const result = await invokeRequest(new GramJs.payments.GetStarsTransactions({
+    peer: inputPeer,
+    offset,
+    inbound: isInbound,
+    outbound: isOutbound,
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  return {
+    nextOffset: result.nextOffset,
+    history: result.history?.map(buildApiStarsTransaction),
+    balance: result.balance.toJSNumber(),
+  };
+}
+
+export async function fetchStarsTransactionById({
+  id, peer,
+}: {
+  id: string;
+  peer?: ApiPeer;
+}) {
+  const inputPeer = peer ? buildInputPeer(peer.id, peer.accessHash) : new GramJs.InputPeerSelf();
+  const result = await invokeRequest(new GramJs.payments.GetStarsTransactionsByID({
+    peer: inputPeer,
+    id: [new GramJs.InputStarsTransaction({
+      id,
+    })],
+  }));
+
+  if (!result?.history?.[0]) {
+    return undefined;
+  }
+
+  return {
+    transaction: buildApiStarsTransaction(result.history[0]),
+  };
+}
+
+export async function fetchStarsTopupOptions() {
+  const result = await invokeRequest(new GramJs.payments.GetStarsTopupOptions());
+
+  if (!result) {
+    return undefined;
+  }
+
+  return result.map(buildApiStarTopupOption);
 }

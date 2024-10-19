@@ -4,23 +4,22 @@ import React, {
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiLanguage } from '../../../api/types';
 import type { ISettings, LangCode } from '../../../types';
 import { SettingsScreens } from '../../../types';
 
 import { selectIsCurrentUserPremium } from '../../../global/selectors';
-import { setLanguage } from '../../../util/langProvider';
+import { oldSetLanguage } from '../../../util/oldLangProvider';
 import { IS_TRANSLATION_SUPPORTED } from '../../../util/windowEnvironment';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
-import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
+import useOldLang from '../../../hooks/useOldLang';
 
+import ItemPicker, { type ItemPickerOption } from '../../common/pickers/ItemPicker';
 import Checkbox from '../../ui/Checkbox';
 import ListItem from '../../ui/ListItem';
 import Loading from '../../ui/Loading';
-import RadioGroup from '../../ui/RadioGroup';
 
 type OwnProps = {
   isActive?: boolean;
@@ -55,7 +54,7 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
 
   const canTranslateChatsEnabled = isCurrentUserPremium && canTranslateChats;
 
-  const lang = useLang();
+  const lang = useOldLang();
 
   useEffect(() => {
     if (!languages?.length) {
@@ -67,7 +66,7 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     setSelectedLanguage(langCode);
     markIsLoading();
 
-    void setLanguage(langCode as LangCode, () => {
+    void oldSetLanguage(langCode as LangCode, () => {
       unmarkIsLoading();
 
       setSettingOption({ language: langCode as LangCode });
@@ -77,8 +76,19 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
   });
 
   const options = useMemo(() => {
-    return languages ? buildOptions(languages) : undefined;
-  }, [languages]);
+    if (!languages) return undefined;
+    const currentLangCode = (window.navigator.language || 'en').toLowerCase();
+    const shortLangCode = currentLangCode.substr(0, 2);
+
+    return languages.map(({ langCode, nativeName, name }) => ({
+      value: langCode,
+      label: nativeName,
+      subLabel: name,
+      isLoading: langCode === selectedLanguage && isLoading,
+    } satisfies ItemPickerOption)).sort((a) => {
+      return currentLangCode && (a.value === currentLangCode || a.value === shortLangCode) ? -1 : 0;
+    });
+  }, [isLoading, languages, selectedLanguage]);
 
   const handleShouldTranslateChange = useLastCallback((newValue: boolean) => {
     setSettingOption({ canTranslate: newValue });
@@ -128,7 +138,6 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
             onCheck={handleShouldTranslateChange}
           />
           <Checkbox
-            className="pb-2"
             label={lang('ShowTranslateChatButton')}
             checked={canTranslateChatsEnabled}
             disabled={!isCurrentUserPremium}
@@ -138,6 +147,7 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
           />
           {(canTranslate || canTranslateChatsEnabled) && (
             <ListItem
+              narrow
               onClick={handleDoNotSelectOpen}
             >
               {lang('DoNotTranslate')}
@@ -149,15 +159,17 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
           </p>
         </div>
       )}
-      <div className="settings-item">
-        <h4 className="settings-item-header mb-4">{lang('Localization.InterfaceLanguage')}</h4>
+      <div className="settings-item settings-item-picker">
+        <h4 className="settings-item-header settings-picker-title">
+          {lang('Localization.InterfaceLanguage')}
+        </h4>
         {options ? (
-          <RadioGroup
-            name="language-settings"
-            options={options}
-            selected={selectedLanguage}
-            loadingOption={isLoading ? selectedLanguage : undefined}
-            onChange={handleChange}
+          <ItemPicker
+            items={options}
+            selectedValue={selectedLanguage}
+            onSelectedValueChange={handleChange}
+            itemInputType="radio"
+            className="settings-picker"
           />
         ) : (
           <Loading />
@@ -166,19 +178,6 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     </div>
   );
 };
-
-function buildOptions(languages: ApiLanguage[]) {
-  const currentLangCode = (window.navigator.language || 'en').toLowerCase();
-  const shortLangCode = currentLangCode.substr(0, 2);
-
-  return languages.map(({ langCode, nativeName, name }) => ({
-    value: langCode,
-    label: nativeName,
-    subLabel: name,
-  })).sort((a) => {
-    return currentLangCode && (a.value === currentLangCode || a.value === shortLangCode) ? -1 : 0;
-  });
-}
 
 export default memo(withGlobal<OwnProps>(
   (global): StateProps => {

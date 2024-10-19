@@ -1,21 +1,20 @@
 import type {
-  ApiChat, ApiGlobalMessageSearchType, ApiMessage, ApiTopic, ApiUser,
+  ApiChat, ApiGlobalMessageSearchType, ApiMessage, ApiTopic,
+  ApiUserStatus,
 } from '../../../api/types';
 import type { ActionReturnType, GlobalState, TabArgs } from '../../types';
 
 import { GLOBAL_SEARCH_SLICE, GLOBAL_TOPIC_SEARCH_SLICE } from '../../../config';
-import { timestampPlusDay } from '../../../util/date/dateFormat';
+import { timestampPlusDay } from '../../../util/dates/dateFormat';
 import { isDeepLink, tryParseDeepLink } from '../../../util/deepLinkParser';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import { buildCollectionByKey } from '../../../util/iteratees';
 import { throttle } from '../../../util/schedulers';
 import { callApi } from '../../../api/gramjs';
 import { isChatChannel, isChatGroup, toChannelId } from '../../helpers/chats';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
-  addChats,
   addMessages,
-  addUsers,
+  addUserStatuses,
   updateGlobalSearch,
   updateGlobalSearchFetchingStatus,
   updateGlobalSearchResults,
@@ -44,27 +43,17 @@ addActionHandler('setGlobalSearchQuery', (global, actions, payload): ActionRetur
       }
 
       const {
-        accountChats, accountUsers, globalChats, globalUsers,
+        accountResultIds, globalResultIds,
       } = result;
-
-      if (accountChats.length || globalChats.length) {
-        global = addChats(global, buildCollectionByKey([...accountChats, ...globalChats], 'id'));
-      }
-
-      if (accountUsers.length || globalUsers.length) {
-        global = addUsers(global, buildCollectionByKey([...accountUsers, ...globalUsers], 'id'));
-      }
 
       global = updateGlobalSearchFetchingStatus(global, { chats: false }, tabId);
       global = updateGlobalSearch(global, {
         localResults: {
-          chatIds: accountChats.map(({ id }) => id),
-          userIds: accountChats.map(({ id }) => id),
+          peerIds: accountResultIds,
         },
         globalResults: {
           ...selectTabState(global, tabId).globalSearch.globalResults,
-          chatIds: globalChats.map(({ id }) => id),
-          userIds: globalUsers.map(({ id }) => id),
+          peerIds: globalResultIds,
         },
       }, tabId);
 
@@ -78,7 +67,8 @@ addActionHandler('setGlobalSearchDate', (global, actions, payload): ActionReturn
   const maxDate = date ? timestampPlusDay(date) : date;
 
   global = updateGlobalSearch(global, {
-    date,
+    minDate: date,
+    maxDate,
     query: '',
     resultsByType: {
       ...selectTabState(global, tabId).globalSearch.resultsByType,
@@ -91,48 +81,100 @@ addActionHandler('setGlobalSearchDate', (global, actions, payload): ActionReturn
   }, tabId);
   setGlobal(global);
 
-  const { chatId } = selectTabState(global, tabId).globalSearch;
-  const chat = chatId ? selectChat(global, chatId) : undefined;
-  searchMessagesGlobal(global, '', 'text', undefined, chat, maxDate, date, tabId);
+  actions.searchMessagesGlobal({ type: 'text', tabId });
 });
 
 addActionHandler('searchMessagesGlobal', (global, actions, payload): ActionReturnType => {
   const { type, tabId = getCurrentTabId() } = payload;
   const {
-    query, resultsByType, chatId, date,
+    query, resultsByType, chatId,
   } = selectTabState(global, tabId).globalSearch;
-  const maxDate = date ? timestampPlusDay(date) : date;
-  const nextOffsetId = (resultsByType?.[type as ApiGlobalMessageSearchType])?.nextOffsetId;
+  const {
+    totalCount, foundIds, nextOffsetId, nextOffsetPeerId, nextOffsetRate,
+  } = resultsByType?.[type] || {};
+
+  // Stop loading if we have all the messages or server returned 0
+  if (totalCount !== undefined && (!totalCount || (foundIds && foundIds.length >= totalCount))) {
+    return;
+  }
 
   const chat = chatId ? selectChat(global, chatId) : undefined;
+  const offsetPeer = nextOffsetPeerId ? selectChat(global, nextOffsetPeerId) : undefined;
 
-  searchMessagesGlobal(global, query, type, nextOffsetId, chat, maxDate, date, tabId);
+  searchMessagesGlobal(global, {
+    query,
+    type,
+    offsetRate: nextOffsetRate,
+    offsetId: nextOffsetId,
+    offsetPeer,
+    chat,
+    tabId,
+  });
 });
 
-async function searchMessagesGlobal<T extends GlobalState>(
-  global: T,
-  query = '', type: ApiGlobalMessageSearchType, offsetRate?: number, chat?: ApiChat, maxDate?: number, minDate?: number,
-  ...[tabId = getCurrentTabId()]: TabArgs<T>
-) {
+addActionHandler('searchPopularBotApps', async (global, actions, payload): Promise<void> => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  const popularBotApps = selectTabState(global, tabId).globalSearch.popularBotApps;
+  const offset = popularBotApps?.nextOffset;
+  if (popularBotApps?.peerIds && !offset) return; // Already fetched all
+
+  global = updateGlobalSearchFetchingStatus(global, { botApps: true }, tabId);
+  setGlobal(global);
+
+  const result = await callApi('fetchPopularAppBots', { offset });
+
+  global = getGlobal();
+  if (!result) {
+    global = updateGlobalSearchFetchingStatus(global, { botApps: false }, tabId);
+    setGlobal(global);
+    return;
+  }
+
+  global = updateGlobalSearch(global, {
+    popularBotApps: {
+      peerIds: [...(popularBotApps?.peerIds || []), ...result.peerIds],
+      nextOffset: result.nextOffset,
+    },
+  }, tabId);
+  global = updateGlobalSearchFetchingStatus(global, { botApps: false }, tabId);
+
+  setGlobal(global);
+});
+
+async function searchMessagesGlobal<T extends GlobalState>(global: T, params: {
+  query?: string;
+  type: ApiGlobalMessageSearchType;
+  offsetRate?: number;
+  offsetId?: number;
+  offsetPeer?: ApiChat;
+  chat?: ApiChat;
+  maxDate?: number;
+  minDate?: number;
+  tabId: TabArgs<T>[0];
+}) {
+  const {
+    query = '', type, offsetRate, offsetId, offsetPeer, chat, maxDate, minDate, tabId = getCurrentTabId(),
+  } = params;
   let result: {
     messages: ApiMessage[];
-    users: ApiUser[];
-    chats: ApiChat[];
+    userStatusesById?: Record<number, ApiUserStatus>;
     topics?: ApiTopic[];
     totalTopicsCount?: number;
     totalCount: number;
-    nextRate: number | undefined;
+    nextOffsetRate?: number;
+    nextOffsetId?: number;
+    nextOffsetPeerId?: string;
   } | undefined;
 
   let messageLink: ApiMessage | undefined;
 
   if (chat) {
-    const localResultRequest = callApi('searchMessagesLocal', {
+    const inChatResultRequest = callApi('searchMessagesInChat', {
       chat,
       query,
       type,
       limit: GLOBAL_SEARCH_SLICE,
-      offsetId: offsetRate,
+      offsetId,
       minDate,
       maxDate,
     });
@@ -142,12 +184,12 @@ async function searchMessagesGlobal<T extends GlobalState>(
       limit: GLOBAL_TOPIC_SEARCH_SLICE,
     }) : undefined;
 
-    const [localResult, topics] = await Promise.all([localResultRequest, topicsRequest]);
+    const [inChatResult, topics] = await Promise.all([inChatResultRequest, topicsRequest]);
 
-    if (localResult) {
+    if (inChatResult) {
       const {
-        messages, users, totalCount, nextOffsetId,
-      } = localResult;
+        messages, totalCount, nextOffsetId,
+      } = inChatResult;
 
       const { topics: localTopics, count } = topics || {};
 
@@ -155,16 +197,16 @@ async function searchMessagesGlobal<T extends GlobalState>(
         topics: localTopics,
         totalTopicsCount: count,
         messages,
-        users,
-        chats: [],
         totalCount,
-        nextRate: nextOffsetId,
+        nextOffsetId,
       };
     }
   } else {
     result = await callApi('searchMessagesGlobal', {
       query,
       offsetRate,
+      offsetId,
+      offsetPeer,
       limit: GLOBAL_SEARCH_SLICE,
       type,
       maxDate,
@@ -193,15 +235,11 @@ async function searchMessagesGlobal<T extends GlobalState>(
   }
 
   const {
-    messages, users, chats, totalCount, nextRate,
+    messages, userStatusesById, totalCount, nextOffsetRate, nextOffsetId, nextOffsetPeerId,
   } = result;
 
-  if (chats.length) {
-    global = addChats(global, buildCollectionByKey(chats, 'id'));
-  }
-
-  if (users.length) {
-    global = addUsers(global, buildCollectionByKey(users, 'id'));
+  if (userStatusesById) {
+    global = addUserStatuses(global, userStatusesById);
   }
 
   if (messages.length) {
@@ -213,7 +251,9 @@ async function searchMessagesGlobal<T extends GlobalState>(
     messages,
     totalCount,
     type,
-    nextRate,
+    nextOffsetRate,
+    nextOffsetId,
+    nextOffsetPeerId,
     tabId,
   );
 

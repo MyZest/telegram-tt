@@ -10,14 +10,15 @@ import type {
   ApiSavedReactionTag,
 } from '../../../../api/types';
 import type { ObserveFn } from '../../../../hooks/useIntersectionObserver';
+import type { ThreadId } from '../../../../types';
 
 import { getReactionKey, isReactionChosen } from '../../../../global/helpers';
 import { selectPeer } from '../../../../global/selectors';
 import buildClassName from '../../../../util/buildClassName';
-import { getMessageKey } from '../../../../util/messageKey';
+import { getMessageKey } from '../../../../util/keys/messageKey';
 
-import useLang from '../../../../hooks/useLang';
 import useLastCallback from '../../../../hooks/useLastCallback';
+import useOldLang from '../../../../hooks/useOldLang';
 
 import ReactionButton from './ReactionButton';
 import SavedTagButton from './SavedTagButton';
@@ -26,6 +27,7 @@ import './Reactions.scss';
 
 type OwnProps = {
   message: ApiMessage;
+  threadId?: ThreadId;
   isOutside?: boolean;
   maxWidth?: number;
   metaChildren?: React.ReactNode;
@@ -39,6 +41,7 @@ const MAX_RECENT_AVATARS = 3;
 
 const Reactions: FC<OwnProps> = ({
   message,
+  threadId,
   isOutside,
   maxWidth,
   metaChildren,
@@ -49,11 +52,11 @@ const Reactions: FC<OwnProps> = ({
 }) => {
   const {
     toggleReaction,
-    setLocalTextSearchTag,
-    searchTextMessagesLocal,
+    updateMiddleSearch,
+    performMiddleSearch,
     openPremiumModal,
   } = getActions();
-  const lang = useLang();
+  const lang = useOldLang();
 
   const { results, areTags, recentReactions } = message.reactions!;
 
@@ -106,8 +109,8 @@ const Reactions: FC<OwnProps> = ({
         return;
       }
 
-      setLocalTextSearchTag({ tag: reaction });
-      searchTextMessagesLocal();
+      updateMiddleSearch({ chatId: message.chatId, threadId, update: { savedTag: reaction } });
+      performMiddleSearch({ chatId: message.chatId, threadId });
       return;
     }
 

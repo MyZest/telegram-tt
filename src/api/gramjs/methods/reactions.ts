@@ -1,7 +1,9 @@
 import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
 
-import type { ApiChat, ApiReaction } from '../../types';
+import type {
+  ApiChat, ApiReaction, ApiSticker,
+} from '../../types';
 
 import {
   API_GENERAL_ID_LIMIT,
@@ -10,16 +12,15 @@ import {
   TOP_REACTIONS_LIMIT,
 } from '../../../config';
 import { split } from '../../../util/iteratees';
-import { buildApiChatFromPreview } from '../apiBuilders/chats';
 import {
+  buildApiAvailableEffect,
   buildApiAvailableReaction,
   buildApiReaction,
   buildApiSavedReactionTag,
   buildMessagePeerReaction,
 } from '../apiBuilders/reactions';
-import { buildApiUser } from '../apiBuilders/users';
+import { buildStickerFromDocument } from '../apiBuilders/symbols';
 import { buildInputPeer, buildInputReaction } from '../gramjsBuilders';
-import { addEntitiesToLocalDb } from '../helpers';
 import localDb from '../localDb';
 import { invokeRequest } from './client';
 
@@ -95,6 +96,41 @@ export async function fetchAvailableReactions() {
   return result.reactions.map(buildApiAvailableReaction);
 }
 
+export async function fetchAvailableEffects() {
+  const result = await invokeRequest(new GramJs.messages.GetAvailableEffects({}));
+
+  if (!result || result instanceof GramJs.messages.AvailableEffectsNotModified) {
+    return undefined;
+  }
+
+  const documentsMap = new Map(result.documents.map((doc) => [String(doc.id), doc]));
+
+  result.documents.forEach((document) => {
+    if (document instanceof GramJs.Document) {
+      localDb.documents[String(document.id)] = document;
+    }
+  });
+
+  const effects = result.effects.map(buildApiAvailableEffect);
+
+  const stickers : ApiSticker[] = [];
+  const emojis : ApiSticker[] = [];
+
+  for (const effect of effects) {
+    if (effect.effectAnimationId) {
+      const document = documentsMap.get(effect.effectStickerId);
+      const emoji = document && buildStickerFromDocument(document, false, effect.isPremium);
+      if (emoji) emojis.push(emoji);
+    } else {
+      const document = localDb.documents[effect.effectStickerId];
+      const sticker = buildStickerFromDocument(document);
+      if (sticker) { stickers.push(sticker); }
+    }
+  }
+
+  return { effects, emojis, stickers };
+}
+
 export function sendReaction({
   chat, messageId, reactions, shouldAddToRecent,
 }: {
@@ -148,14 +184,9 @@ export async function fetchMessageReactionsList({
     return undefined;
   }
 
-  addEntitiesToLocalDb(result.users);
-  addEntitiesToLocalDb(result.chats);
-
   const { nextOffset, reactions, count } = result;
 
   return {
-    users: result.users.map(buildApiUser).filter(Boolean),
-    chats: result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean),
     nextOffset,
     reactions: reactions.map(buildMessagePeerReaction).filter(Boolean),
     count,

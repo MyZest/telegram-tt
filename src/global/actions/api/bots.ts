@@ -1,6 +1,8 @@
 import type { InlineBotSettings } from '../../../types';
 import type { RequiredGlobalActions } from '../../index';
-import type { ActionReturnType, GlobalState, TabArgs } from '../../types';
+import type {
+  ActionReturnType, GlobalState, TabArgs, WebApp,
+} from '../../types';
 import {
   type ApiChat, type ApiChatType, type ApiContact, type ApiInputMessageReplyInfo, type ApiPeer, type ApiUrlAuthResult,
   MAIN_THREAD_ID,
@@ -9,8 +11,7 @@ import { ManagementProgress } from '../../../types';
 
 import { BOT_FATHER_USERNAME, GENERAL_REFETCH_INTERVAL } from '../../../config';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import { buildCollectionByKey } from '../../../util/iteratees';
-import { translate } from '../../../util/langProvider';
+import { oldTranslate } from '../../../util/oldLangProvider';
 import PopupManager from '../../../util/PopupManager';
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { debounce } from '../../../util/schedulers';
@@ -18,12 +19,21 @@ import { getServerTime } from '../../../util/serverTime';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
 import { callApi } from '../../../api/gramjs';
 import {
+  getWebAppKey,
+} from '../../helpers/bots';
+import {
   addActionHandler, getGlobal, setGlobal,
 } from '../../index';
 import {
-  addChats, addUsers, removeBlockedUser, updateManagementProgress, updateUser, updateUserFullInfo,
+  removeBlockedUser, updateManagementProgress, updateUser, updateUserFullInfo,
 } from '../../reducers';
-import { replaceInlineBotSettings, replaceInlineBotsIsLoading } from '../../reducers/bots';
+import {
+  activateWebAppIfOpen,
+  addWebAppToOpenList, clearOpenedWebApps, hasOpenedWebApps,
+  removeActiveWebAppFromOpenList, removeWebAppFromOpenList,
+  replaceInlineBotSettings, replaceInlineBotsIsLoading,
+  replaceIsWebAppModalOpen, replaceWebAppModalState, updateWebApp,
+} from '../../reducers/bots';
 import { updateTabState } from '../../reducers/tabs';
 import {
   selectBot,
@@ -37,6 +47,7 @@ import {
   selectMessageReplyInfo,
   selectPeer,
   selectSendAs,
+  selectSender,
   selectTabState,
   selectUser,
   selectUserFullInfo,
@@ -49,7 +60,14 @@ const runDebouncedForSearch = debounce((cb) => cb(), 500, false);
 let botFatherId: string | null;
 
 addActionHandler('clickBotInlineButton', (global, actions, payload): ActionReturnType => {
-  const { messageId, button, tabId = getCurrentTabId() } = payload;
+  const {
+    chatId, messageId, button, tabId = getCurrentTabId(),
+  } = payload;
+  const chat = selectChat(global, chatId);
+  const message = selectChatMessage(global, chatId, messageId);
+  if (!chat || !message) {
+    return;
+  }
 
   switch (button.type) {
     case 'command':
@@ -61,11 +79,6 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
       break;
     }
     case 'callback': {
-      const chat = selectCurrentChat(global, tabId);
-      if (!chat) {
-        return;
-      }
-
       void answerCallbackButton(global, actions, chat, messageId, button.data, undefined, tabId);
       break;
     }
@@ -89,21 +102,13 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
       break;
     }
     case 'receipt': {
-      const chat = selectCurrentChat(global, tabId);
-      if (!chat) {
-        return;
-      }
       const { receiptMessageId } = button;
       actions.getReceipt({
-        receiptMessageId, chatId: chat.id, messageId, tabId,
+        chatId: chat.id, messageId: receiptMessageId, tabId,
       });
       break;
     }
     case 'buy': {
-      const chat = selectCurrentChat(global, tabId);
-      if (!chat) {
-        return;
-      }
       actions.openInvoice({
         type: 'message',
         chatId: chat.id,
@@ -113,11 +118,6 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
       break;
     }
     case 'game': {
-      const chat = selectCurrentChat(global, tabId);
-      if (!chat) {
-        return;
-      }
-
       void answerCallbackButton(global, actions, chat, messageId, undefined, true, tabId);
       break;
     }
@@ -137,30 +137,22 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
 
     case 'simpleWebView': {
       const { url } = button;
-      const { chatId } = selectCurrentMessageList(global, tabId) || {};
-      if (!chatId) {
+      const sender = selectSender(global, message);
+      if (!sender) {
         return;
       }
-      const message = selectChatMessage(global, chatId, messageId);
-      if (!message?.senderId) return;
+
       const theme = extractCurrentThemeParams();
       actions.requestSimpleWebView({
-        url, botId: message?.senderId, theme, buttonText: button.text, tabId,
+        url, botId: sender.id, theme, buttonText: button.text, tabId,
       });
       break;
     }
 
     case 'webView': {
       const { url } = button;
-      const chat = selectCurrentChat(global, tabId);
-      if (!chat) {
-        return;
-      }
-      const message = selectChatMessage(global, chat.id, messageId);
-      if (!message) {
-        return;
-      }
-      const botId = message.viaBotId || message.senderId;
+      const sender = selectSender(global, message);
+      const botId = message.viaBotId || sender?.id;
       if (!botId) {
         return;
       }
@@ -177,10 +169,6 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
     }
     case 'urlAuth': {
       const { url } = button;
-      const chat = selectCurrentChat(global, tabId);
-      if (!chat) {
-        return;
-      }
       actions.requestBotUrlAuth({
         chatId: chat.id,
         messageId,
@@ -246,14 +234,38 @@ addActionHandler('loadTopInlineBots', async (global): Promise<void> => {
     return;
   }
 
-  const { ids, users } = result;
+  const { ids } = result;
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(users, 'id'));
   global = {
     ...global,
     topInlineBots: {
       ...global.topInlineBots,
+      userIds: ids,
+      lastRequestedAt: getServerTime(),
+    },
+  };
+  setGlobal(global);
+});
+
+addActionHandler('loadTopBotApps', async (global): Promise<void> => {
+  const { lastRequestedAt } = global.topBotApps;
+  if (lastRequestedAt && getServerTime() - lastRequestedAt < TOP_PEERS_REQUEST_COOLDOWN) {
+    return;
+  }
+
+  const result = await callApi('fetchTopBotApps');
+  if (!result) {
+    return;
+  }
+
+  const { ids } = result;
+
+  global = getGlobal();
+  global = {
+    ...global,
+    topBotApps: {
+      ...global.topBotApps,
       userIds: ids,
       lastRequestedAt: getServerTime(),
     },
@@ -281,8 +293,6 @@ addActionHandler('queryInlineBot', async (global, actions, payload): Promise<voi
       return;
     }
 
-    global = addUsers(global, { [inlineBot.id]: inlineBot });
-    global = addChats(global, { [chat.id]: chat });
     inlineBotData = {
       id: inlineBot.id,
       query: '',
@@ -329,7 +339,8 @@ addActionHandler('switchBotInline', (global, actions, payload): ActionReturnType
     if (!message) {
       return undefined;
     }
-    botId = message.viaBotId || message.senderId;
+    const sender = selectSender(global, message);
+    botId = message.viaBotId || sender?.id;
   }
 
   if (!botId) {
@@ -466,6 +477,7 @@ addActionHandler('sharePhoneWithBot', async (global, actions, payload): Promise<
   await callApi('sendMessage', {
     chat,
     contact: {
+      mediaType: 'contact',
       firstName: currentUser.firstName || '',
       lastName: currentUser.lastName || '',
       phoneNumber: currentUser.phoneNumber || '',
@@ -480,6 +492,8 @@ addActionHandler('requestSimpleWebView', async (global, actions, payload): Promi
     url, botId, theme, buttonText, isFromSideMenu, isFromSwitchWebView, startParam,
     tabId = getCurrentTabId(),
   } = payload;
+
+  if (checkIfOpenOrActivate(global, botId, tabId, url)) return;
 
   const bot = selectUser(global, botId);
   if (!bot) return;
@@ -512,13 +526,13 @@ addActionHandler('requestSimpleWebView', async (global, actions, payload): Promi
   }
 
   global = getGlobal();
-  global = updateTabState(global, {
-    webApp: {
-      url: webViewUrl,
-      botId,
-      buttonText,
-    },
-  }, tabId);
+  const newActiveApp: WebApp = {
+    requestUrl: url,
+    url: webViewUrl,
+    botId,
+    buttonText,
+  };
+  global = addWebAppToOpenList(global, newActiveApp, true, true, tabId);
   setGlobal(global);
 });
 
@@ -527,6 +541,8 @@ addActionHandler('requestWebView', async (global, actions, payload): Promise<voi
     url, botId, peerId, theme, isSilent, buttonText, isFromBotMenu, startParam,
     tabId = getCurrentTabId(),
   } = payload;
+
+  if (checkIfOpenOrActivate(global, botId, tabId, url)) return;
 
   const bot = selectUser(global, botId);
   if (!bot) return;
@@ -573,23 +589,122 @@ addActionHandler('requestWebView', async (global, actions, payload): Promise<voi
   const { url: webViewUrl, queryId } = result;
 
   global = getGlobal();
-  global = updateTabState(global, {
-    webApp: {
-      url: webViewUrl,
-      botId,
-      queryId,
-      replyInfo,
-      buttonText,
-    },
-  }, tabId);
+  const newActiveApp: WebApp = {
+    requestUrl: url,
+    url: webViewUrl,
+    botId,
+    peerId,
+    queryId,
+    replyInfo,
+    buttonText,
+  };
+  global = addWebAppToOpenList(global, newActiveApp, true, true, tabId);
   setGlobal(global);
+});
+
+addActionHandler('requestMainWebView', async (global, actions, payload): Promise<void> => {
+  const {
+    botId, peerId, theme, startParam, shouldMarkBotTrusted,
+    tabId = getCurrentTabId(),
+  } = payload;
+
+  if (checkIfOpenOrActivate(global, botId, tabId)) return;
+
+  const bot = selectUser(global, botId);
+  if (!bot) return;
+  const peer = selectPeer(global, peerId);
+  if (!peer) return;
+
+  if (!selectIsTrustedBot(global, botId)) {
+    if (shouldMarkBotTrusted) {
+      actions.markBotTrusted({ botId, isWriteAllowed: true, tabId });
+    } else {
+      global = updateTabState(global, {
+        botTrustRequest: {
+          botId,
+          type: 'webApp',
+          onConfirm: {
+            action: 'requestMainWebView',
+            payload,
+          },
+        },
+      }, tabId);
+      setGlobal(global);
+      return;
+    }
+  }
+
+  const result = await callApi('requestMainWebView', {
+    bot,
+    peer,
+    theme,
+    startParam,
+  });
+  if (!result) {
+    return;
+  }
+
+  const { url: webViewUrl, queryId } = result;
+
+  global = getGlobal();
+  const newActiveApp: WebApp = {
+    url: webViewUrl,
+    botId,
+    peerId,
+    queryId,
+    buttonText: '',
+  };
+  global = addWebAppToOpenList(global, newActiveApp, true, true, tabId);
+  setGlobal(global);
+});
+
+addActionHandler('loadPreviewMedias', async (global, actions, payload): Promise<void> => {
+  const {
+    botId,
+  } = payload;
+  const bot = selectUser(global, botId);
+  if (!bot) return;
+
+  const medias = await callApi('fetchPreviewMedias', {
+    bot,
+  });
+
+  global = getGlobal();
+  if (medias) {
+    global = {
+      ...global,
+      users: {
+        ...global.users,
+        previewMediaByBotId: {
+          ...global.users.previewMediaByBotId,
+          [botId]: medias,
+        },
+      },
+    };
+
+    setGlobal(global);
+  }
+});
+
+addActionHandler('openWebAppTab', (global, actions, payload): ActionReturnType => {
+  const {
+    webApp, tabId = getCurrentTabId(),
+  } = payload;
+
+  if (webApp) {
+    global = getGlobal();
+    global = addWebAppToOpenList(global, webApp, true, true, tabId);
+    setGlobal(global);
+  }
 });
 
 addActionHandler('requestAppWebView', async (global, actions, payload): Promise<void> => {
   const {
-    botId, appName, startApp, theme, isWriteAllowed, isFromConfirm,
+    botId, appName, startApp, theme, isWriteAllowed, isFromConfirm, shouldSkipBotTrustRequest,
     tabId = getCurrentTabId(),
   } = payload;
+
+  if (checkIfOpenOrActivate(global, botId, tabId, appName)) return;
 
   const bot = selectUser(global, botId);
   if (!bot) return;
@@ -601,11 +716,9 @@ addActionHandler('requestAppWebView', async (global, actions, payload): Promise<
       bot,
     });
     if (result) {
-      const attachBot = result.bot;
       global = getGlobal();
-      global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-      setGlobal(global);
 
+      const attachBot = result.bot;
       const shouldAskForTos = attachBot.isDisclaimerNeeded || attachBot.isForAttachMenu || attachBot.isForSideMenu;
 
       if (shouldAskForTos) {
@@ -634,11 +747,14 @@ addActionHandler('requestAppWebView', async (global, actions, payload): Promise<
   global = getGlobal();
 
   if (!botApp) {
-    actions.showNotification({ message: translate('lng_username_app_not_found'), tabId });
+    actions.showNotification({ message: oldTranslate('lng_username_app_not_found'), tabId });
     return;
   }
 
-  if (botApp.isInactive && !selectIsTrustedBot(global, botId)) {
+  const shouldRequestBotTrust = !shouldSkipBotTrustRequest && (botApp.isInactive || !selectIsTrustedBot(global, botId));
+
+  if (shouldRequestBotTrust) {
+    payload.shouldSkipBotTrustRequest = true;
     global = updateTabState(global, {
       botTrustRequest: {
         botId,
@@ -667,13 +783,19 @@ addActionHandler('requestAppWebView', async (global, actions, payload): Promise<
 
   if (!url) return;
 
-  global = updateTabState(global, {
-    webApp: {
-      url,
-      botId,
-      buttonText: '',
-    },
-  }, tabId);
+  global = getGlobal();
+
+  const peerId = (peer ? peer.id : bot!.id);
+
+  const newActiveApp: WebApp = {
+    url,
+    peerId,
+    botId,
+    appName,
+    buttonText: '',
+  };
+  global = addWebAppToOpenList(global, newActiveApp, true, true, tabId);
+
   setGlobal(global);
 });
 
@@ -699,7 +821,7 @@ addActionHandler('prolongWebView', async (global, actions, payload): Promise<voi
   });
 
   if (!result) {
-    actions.closeWebApp({ tabId });
+    actions.closeActiveWebApp({ tabId });
   }
 });
 
@@ -715,25 +837,60 @@ addActionHandler('sendWebViewData', (global, actions, payload): ActionReturnType
   });
 });
 
-addActionHandler('closeWebApp', (global, actions, payload): ActionReturnType => {
+addActionHandler('updateWebApp', (global, actions, payload): ActionReturnType => {
+  const {
+    webApp, tabId = getCurrentTabId(),
+  } = payload;
+  return updateWebApp(global, webApp, tabId);
+});
+
+addActionHandler('closeActiveWebApp', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};
 
-  return updateTabState(global, {
-    webApp: undefined,
-  }, tabId);
+  global = removeActiveWebAppFromOpenList(global, tabId);
+  if (!hasOpenedWebApps(global, tabId)) return replaceIsWebAppModalOpen(global, false, tabId);
+
+  return global;
+});
+
+addActionHandler('closeWebApp', (global, actions, payload): ActionReturnType => {
+  const { webApp, skipClosingConfirmation, tabId = getCurrentTabId() } = payload || {};
+
+  global = removeWebAppFromOpenList(global, webApp, skipClosingConfirmation, tabId);
+  if (!hasOpenedWebApps(global, tabId)) return replaceIsWebAppModalOpen(global, false, tabId);
+
+  return global;
+});
+
+addActionHandler('closeWebAppModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  global = clearOpenedWebApps(global, tabId);
+  if (!hasOpenedWebApps(global, tabId)) return replaceIsWebAppModalOpen(global, false, tabId);
+
+  return global;
+});
+
+addActionHandler('changeWebAppModalState', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  const tabState = selectTabState(global, tabId);
+
+  const newModalState = tabState.webApps.modalState === 'maximized' ? 'minimized' : 'maximized';
+  return replaceWebAppModalState(global, newModalState, tabId);
 });
 
 addActionHandler('setWebAppPaymentSlug', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload;
   const tabState = selectTabState(global, tabId);
-  if (!tabState.webApp?.url) return undefined;
+  const activeWebApp = tabState.webApps.activeWebApp;
+  if (!activeWebApp?.url) return undefined;
 
-  return updateTabState(global, {
-    webApp: {
-      ...tabState.webApp,
-      slug: payload.slug,
-    },
-  }, tabId);
+  const updatedApp = {
+    ...activeWebApp,
+    slug: payload.slug,
+  };
+
+  return updateWebApp(global, updatedApp, tabId);
 });
 
 addActionHandler('cancelBotTrustRequest', (global, actions, payload): ActionReturnType => {
@@ -791,6 +948,31 @@ addActionHandler('toggleAttachBot', async (global, actions, payload): Promise<vo
   await callApi('toggleAttachBot', { bot, isWriteAllowed, isEnabled });
 });
 
+export function isWepAppOpened<T extends GlobalState>(
+  global: T, webApp: Partial<WebApp>, tabId: number,
+) {
+  const currentTabState = selectTabState(global, tabId);
+  const openedWebApps = currentTabState.webApps.openedWebApps;
+  const key = getWebAppKey(webApp);
+  if (!key) return false;
+  return openedWebApps[key];
+}
+
+export function checkIfOpenOrActivate<T extends GlobalState>(
+  global: T, botId: string, tabId: number, requestUrl?: string, webAppName?: string,
+) {
+  const webAppForCheck = { botId, requestUrl, webAppName };
+  if (isWepAppOpened(global, webAppForCheck, tabId)) {
+    const key = getWebAppKey(webAppForCheck);
+    if (key) {
+      global = activateWebAppIfOpen(global, key, tabId);
+      setGlobal(global);
+    }
+    return true;
+  }
+  return false;
+}
+
 async function loadAttachBots<T extends GlobalState>(global: T, hash?: string) {
   const result = await callApi('loadAttachBots', { hash });
   if (!result) {
@@ -798,7 +980,6 @@ async function loadAttachBots<T extends GlobalState>(global: T, hash?: string) {
   }
 
   global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
   global = {
     ...global,
     attachMenu: {

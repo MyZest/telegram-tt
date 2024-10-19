@@ -1,13 +1,23 @@
 import type { TeactNode } from '../lib/teact/teact';
 
 import type {
-  ApiBotInlineMediaResult, ApiBotInlineResult, ApiBotInlineSwitchPm,
+  ApiBotInlineMediaResult,
+  ApiBotInlineResult,
+  ApiBotInlineSwitchPm,
   ApiBotInlineSwitchWebview,
   ApiChat,
   ApiChatInviteImporter,
+  ApiDocument,
   ApiExportedInvite,
-  ApiLanguage, ApiMessage, ApiReaction, ApiStickerSet, ApiUser,
+  ApiLanguage,
+  ApiMessage,
+  ApiPhoto,
+  ApiReaction,
+  ApiStickerSet,
+  ApiUser,
+  ApiVideo,
 } from '../api/types';
+import type { SearchResultKey } from '../util/keys/searchResultKey';
 import type { IconName } from './icons';
 
 export type TextPart = TeactNode;
@@ -24,9 +34,12 @@ export enum FocusDirection {
   Static,
 }
 
+export type ScrollTargetPosition = ScrollLogicalPosition | 'centerOrTop';
+
 export interface IAlbum {
   albumId: string;
   messages: ApiMessage[];
+  isPaidMedia?: boolean;
   mainMessage: ApiMessage;
   captionMessage?: ApiMessage;
   hasMultipleCaptions: boolean;
@@ -278,6 +291,7 @@ export enum LeftColumnContent {
 export enum GlobalSearchContent {
   ChatList,
   ChannelList,
+  BotApps,
   Media,
   Links,
   Files,
@@ -287,7 +301,6 @@ export enum GlobalSearchContent {
 
 export enum RightColumnContent {
   ChatInfo,
-  Search,
   Management,
   Statistics,
   BoostStatistics,
@@ -299,7 +312,10 @@ export enum RightColumnContent {
   AddingMembers,
   CreateTopic,
   EditTopic,
+  MonetizationStatistics,
 }
+
+export type MediaViewerMedia = ApiPhoto | ApiVideo | ApiDocument;
 
 export enum MediaViewerOrigin {
   Inline,
@@ -312,6 +328,9 @@ export enum MediaViewerOrigin {
   ScheduledAlbum,
   SearchResult,
   SuggestedAvatar,
+  StarsTransaction,
+  PreviewMedia,
+  SponsoredMessage,
 }
 
 export enum StoryViewerOrigin {
@@ -375,6 +394,7 @@ export type ProfileTabType =
   | 'members'
   | 'commonChats'
   | 'media'
+  | 'previewMedia'
   | 'documents'
   | 'links'
   | 'audio'
@@ -384,9 +404,43 @@ export type ProfileTabType =
   | 'similarChannels'
   | 'dialogs';
 export type SharedMediaType = 'media' | 'documents' | 'links' | 'audio' | 'voice';
+export type MiddleSearchType = 'chat' | 'myChats' | 'channels';
+export type MiddleSearchParams = {
+  requestedQuery?: string;
+  savedTag?: ApiReaction;
+  isHashtag?: boolean;
+  fetchingQuery?: string;
+  type: MiddleSearchType;
+  results?: MiddleSearchResults;
+};
+export type MiddleSearchResults = {
+  query: string;
+  totalCount?: number;
+  nextOffsetId?: number;
+  nextOffsetPeerId?: string;
+  nextOffsetRate?: number;
+  foundIds?: SearchResultKey[];
+};
+
 export type ApiPrivacyKey = 'phoneNumber' | 'addByPhone' | 'lastSeen' | 'profilePhoto' | 'voiceMessages' |
 'forwards' | 'chatInvite' | 'phoneCall' | 'phoneP2P' | 'bio' | 'birthday';
 export type PrivacyVisibility = 'everybody' | 'contacts' | 'closeFriends' | 'nonContacts' | 'nobody';
+
+export interface LoadingState {
+  areAllItemsLoadedForwards: boolean;
+  areAllItemsLoadedBackwards: boolean;
+}
+
+export interface ChatMediaSearchSegment {
+  foundIds: number[];
+  loadingState: LoadingState;
+}
+
+export interface ChatMediaSearchParams {
+  currentSegment: ChatMediaSearchSegment;
+  segments: ChatMediaSearchSegment[];
+  isLoading: boolean;
+}
 
 export enum ProfileState {
   Profile,
@@ -459,15 +513,22 @@ export type InlineBotSettings = {
   cacheTime: number;
 };
 
-export type CustomPeerType = 'premium' | 'toBeDistributed';
+export type CustomPeerType = 'premium' | 'toBeDistributed' | 'contacts' | 'nonContacts'
+| 'groups' | 'channels' | 'bots' | 'excludeMuted' | 'excludeArchived' | 'excludeRead' | 'stars';
 
 export interface CustomPeer {
-  type: CustomPeerType;
   isCustomPeer: true;
+  key?: string | number;
   titleKey: string;
   subtitleKey?: string;
   avatarIcon: IconName;
   isAvatarSquare?: boolean;
+  titleValue?: number;
   peerColorId?: number;
+  customPeerAvatarColor?: string;
   withPremiumGradient?: boolean;
+}
+
+export interface UniqueCustomPeer extends CustomPeer {
+  type: CustomPeerType;
 }

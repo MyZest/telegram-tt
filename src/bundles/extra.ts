@@ -12,21 +12,28 @@ export { default as UrlAuthModal } from '../components/modals/urlAuth/UrlAuthMod
 export { default as HistoryCalendar } from '../components/main/HistoryCalendar';
 export { default as NewContactModal } from '../components/main/NewContactModal';
 export { default as WebAppModal } from '../components/modals/webApp/WebAppModal';
+export { default as MinimizedWebAppModal } from '../components/modals/webApp/MinimizedWebAppModal';
 export { default as BotTrustModal } from '../components/main/BotTrustModal';
 export { default as AttachBotInstallModal } from '../components/modals/attachBotInstall/AttachBotInstallModal';
 export { default as DeleteFolderDialog } from '../components/main/DeleteFolderDialog';
 export { default as PremiumMainModal } from '../components/main/premium/PremiumMainModal';
-export { default as GiftPremiumModal } from '../components/main/premium/GiftPremiumModal';
+export { default as PremiumGiftModal } from '../components/main/premium/PremiumGiftModal';
+export { default as StarsGiftModal } from '../components/main/premium/StarsGiftModal';
 export { default as GiveawayModal } from '../components/main/premium/GiveawayModal';
-export { default as PremiumGiftingModal } from '../components/main/premium/PremiumGiftingModal';
-export { default as AppendEntityPickerModal } from '../components/main/AppendEntityPickerModal';
+export { default as PremiumGiftingPickerModal } from '../components/main/premium/PremiumGiftingPickerModal';
+export { default as StarsGiftingPickerModal } from '../components/main/premium/StarsGiftingPickerModal';
 export { default as PremiumLimitReachedModal } from '../components/main/premium/common/PremiumLimitReachedModal';
 export { default as StatusPickerMenu } from '../components/left/main/StatusPickerMenu';
 export { default as BoostModal } from '../components/modals/boost/BoostModal';
 export { default as GiftCodeModal } from '../components/modals/giftcode/GiftCodeModal';
 export { default as ChatlistModal } from '../components/modals/chatlist/ChatlistModal';
+export { default as StarsBalanceModal } from '../components/modals/stars/StarsBalanceModal';
+export { default as StarPaymentModal } from '../components/modals/stars/StarsPaymentModal';
+export { default as StarsTransactionInfoModal } from '../components/modals/stars/transaction/StarsTransactionModal';
 
 export { default as AboutAdsModal } from '../components/common/AboutAdsModal';
+export { default as AboutMonetizationModal } from '../components/common/AboutMonetizationModal';
+export { default as VerificationMonetizationModal } from '../components/common/VerificationMonetizationModal';
 export { default as ReportAdModal } from '../components/modals/reportAd/ReportAdModal';
 export { default as CalendarModal } from '../components/common/CalendarModal';
 export { default as DeleteMessageModal } from '../components/common/DeleteMessageModal';
@@ -55,7 +62,7 @@ export { default as SponsoredMessageContextMenuContainer }
 export { default as StickerSetModal } from '../components/common/StickerSetModal';
 export { default as CustomEmojiSetsModal } from '../components/common/CustomEmojiSetsModal';
 export { default as HeaderMenuContainer } from '../components/middle/HeaderMenuContainer';
-export { default as MobileSearch } from '../components/middle/MobileSearch';
+export { default as MiddleSearch } from '../components/middle/search/MiddleSearch';
 export { default as ReactionPicker } from '../components/middle/message/reactions/ReactionPicker';
 
 export { default as AttachmentModal } from '../components/middle/composer/AttachmentModal';
@@ -73,7 +80,6 @@ export { default as EmojiTooltip } from '../components/middle/composer/EmojiTool
 export { default as InlineBotTooltip } from '../components/middle/composer/InlineBotTooltip';
 export { default as SendAsMenu } from '../components/middle/composer/SendAsMenu';
 
-export { default as RightSearch } from '../components/right/RightSearch';
 export { default as StickerSearch } from '../components/right/StickerSearch';
 export { default as GifSearch } from '../components/right/GifSearch';
 export { default as Statistics } from '../components/right/statistics/Statistics';

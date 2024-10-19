@@ -4,7 +4,9 @@ import { PaymentStep } from '../../../types';
 import { addActionHandler, setGlobal } from '../../index';
 import {
   addBlockedUser,
+  addChats,
   addStoriesForPeer,
+  addUsers,
   removeBlockedUser,
   removePeerStory,
   setConfirmPaymentUrl,
@@ -13,11 +15,21 @@ import {
   updatePeerStory,
   updatePeersWithStories,
   updateStealthMode,
+  updateThreadInfos,
 } from '../../reducers';
 import { selectPeerStories, selectPeerStory } from '../../selectors';
 
 addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
   switch (update['@type']) {
+    case 'updateEntities': {
+      const { users, chats, threadInfos } = update;
+      if (users) global = addUsers(global, users);
+      if (chats) global = addChats(global, chats);
+      if (threadInfos) global = updateThreadInfos(global, threadInfos);
+      setGlobal(global);
+      break;
+    }
+
     case 'updatePeerBlocked':
       if (update.isBlocked) {
         return addBlockedUser(global, update.id);
@@ -115,9 +127,9 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateWebViewResultSent':
       Object.values(global.byTabId).forEach((tabState) => {
-        if (tabState.webApp?.queryId === update.queryId) {
+        if (tabState.webApps.activeWebApp?.queryId === update.queryId) {
           actions.resetDraftReplyInfo({ tabId: tabState.id });
-          actions.closeWebApp({ tabId: tabState.id });
+          actions.closeActiveWebApp({ tabId: tabState.id });
         }
       });
       break;
