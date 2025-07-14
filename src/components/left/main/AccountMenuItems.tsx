@@ -1,5 +1,5 @@
 import { memo, useMemo } from '../../../lib/teact/teact';
-import { getActions } from '../../../global';
+// import { getActions } from '../../../global';
 
 import type { ApiUser } from '../../../api/types';
 import type { CustomPeer } from '../../../types';
@@ -8,8 +8,8 @@ import { getCurrentMaxAccountCount, getCurrentProdAccountCount } from '../../../
 import { getAccountSlotUrl } from '../../../util/multiaccount';
 import { REM } from '../../common/helpers/mediaDimensions';
 
-import useLang from '../../../hooks/useLang';
-import useLastCallback from '../../../hooks/useLastCallback';
+// import useLang from '../../../hooks/useLang';
+// import useLastCallback from '../../../hooks/useLastCallback';
 import useMultiaccountInfo from '../../../hooks/useMultiaccountInfo';
 
 import Avatar from '../../common/Avatar';
@@ -23,33 +23,33 @@ type OwnProps = {
   onSelectCurrent?: VoidFunction;
 };
 
-const NOTIFICATION_DURATION = 7000;
+// const NOTIFICATION_DURATION = 7000;
 
 const AccountMenuItems = ({
   currentUser,
   totalLimit,
   onSelectCurrent,
 }: OwnProps) => {
-  const { showNotification } = getActions();
-  const lang = useLang();
+  // const { showNotification } = getActions();
+  // const lang = useLang();
   const accounts = useMultiaccountInfo(currentUser);
 
   const currentCount = getCurrentProdAccountCount();
-  const maxCount = getCurrentMaxAccountCount();
+  // const maxCount = getCurrentMaxAccountCount();
 
   const currentAccountInfo = useMemo(() => {
     return Object.values(accounts).find((account) => account.userId === currentUser.id);
   }, [accounts, currentUser.id]);
 
-  const shouldShowLimit = currentCount >= maxCount;
+  // const shouldShowLimit = currentCount >= maxCount;
 
-  const handleLimitClick = useLastCallback(() => {
-    showNotification({
-      title: lang('PremiumLimitAccountsTitle'),
-      message: currentUser.isPremium ? lang('PremiumLimitAccounts') : lang('PremiumLimitAccountsNoPremium'),
-      duration: NOTIFICATION_DURATION,
-    });
-  });
+  // const handleLimitClick = useLastCallback(() => {
+  //   showNotification({
+  //     title: lang('PremiumLimitAccountsTitle'),
+  //     message: currentUser.isPremium ? lang('PremiumLimitAccounts') : lang('PremiumLimitAccountsNoPremium'),
+  //     duration: NOTIFICATION_DURATION,
+  //   });
+  // });
 
   const newAccountUrl = useMemo(() => {
     if (!Object.values(accounts).length) {
@@ -106,7 +106,7 @@ const AccountMenuItems = ({
             </>
           );
         })}
-      {newAccountUrl && (
+      {/* {newAccountUrl && (
         <MenuItem
           icon="add"
           rel="noopener" // Allow referrer to be passed
@@ -115,7 +115,7 @@ const AccountMenuItems = ({
         >
           {lang('MenuAddAccount')}
         </MenuItem>
-      )}
+      )} */}
     </>
   );
 };
