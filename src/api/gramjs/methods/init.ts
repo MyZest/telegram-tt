@@ -12,7 +12,6 @@ import { init as initClient } from './client';
 import * as methods from './index';
 
 export function initApi(_onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs, initialLocalDb?: LocalDb) {
-  onUpdate = _onUpdate;
 
   if (!initialArgs.sessionData) {
     // @ts-ignore;

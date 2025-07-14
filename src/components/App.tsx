@@ -2,8 +2,7 @@
 // @ts-nocheck
 import type { FC } from '../lib/teact/teact';
 import { useEffect, useLayoutEffect } from '../lib/teact/teact';
-import { withGlobal } from '../global';
-
+import { getActions,withGlobal } from '../global';
 import type { GlobalState } from '../global/types';
 import type { ThemeKey } from '../types';
 import type { UiLoaderPage } from './common/UiLoader';
