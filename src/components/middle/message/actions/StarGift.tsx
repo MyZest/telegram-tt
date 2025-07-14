@@ -1,15 +1,16 @@
-import React, { memo, useMemo, useRef } from '../../../../lib/teact/teact';
+import { memo, useMemo, useRef } from '../../../../lib/teact/teact';
 import { withGlobal } from '../../../../global';
 
 import type { ApiMessage, ApiPeer } from '../../../../api/types';
 import type { ApiMessageActionStarGift } from '../../../../api/types/messageActions';
 
-import { getPeerTitle, isChatChannel } from '../../../../global/helpers';
-import { isApiPeerChat } from '../../../../global/helpers/peers';
+import { isChatChannel } from '../../../../global/helpers';
+import { getPeerTitle, isApiPeerChat } from '../../../../global/helpers/peers';
 import {
   selectCanPlayAnimatedEmojis,
   selectPeer,
   selectSender,
+  selectUser,
 } from '../../../../global/selectors';
 import buildClassName from '../../../../util/buildClassName';
 import { formatStarsAsText } from '../../../../util/localization/format';
@@ -57,10 +58,8 @@ const StarGiftAction = ({
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
 }: OwnProps & StateProps) => {
-  // eslint-disable-next-line no-null/no-null
-  const ref = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line no-null/no-null
-  const stickerRef = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>();
+  const stickerRef = useRef<HTMLDivElement>();
   const lang = useLang();
 
   const { isOutgoing } = message;
@@ -141,10 +140,12 @@ const StarGiftAction = ({
           />
         )}
       </div>
-      {action.gift.availabilityTotal && (
+      {Boolean(action.gift.availabilityTotal) && (
         <GiftRibbon
           color={backgroundColor || 'blue'}
-          text={lang('ActionStarGiftLimitedRibbon', { total: formatIntegerCompact(action.gift.availabilityTotal) })}
+          text={lang('ActionStarGiftLimitedRibbon', {
+            total: formatIntegerCompact(lang, action.gift.availabilityTotal),
+          })}
         />
       )}
       <div className={styles.info}>
@@ -175,10 +176,11 @@ const StarGiftAction = ({
 
 export default memo(withGlobal<OwnProps>(
   (global, { message, action }): StateProps => {
+    const currentUser = selectUser(global, global.currentUserId!);
     const canPlayAnimatedEmojis = selectCanPlayAnimatedEmojis(global);
     const messageSender = selectSender(global, message);
     const giftSender = action.fromId ? selectPeer(global, action.fromId) : undefined;
-    const messageRecipient = selectPeer(global, message.chatId);
+    const messageRecipient = message.isOutgoing ? selectPeer(global, message.chatId) : currentUser;
     const giftRecipient = action.peerId ? selectPeer(global, action.peerId) : undefined;
 
     return {

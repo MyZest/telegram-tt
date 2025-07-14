@@ -23,13 +23,16 @@ import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../../api/types';
 
 import {
   ANONYMOUS_USER_ID, API_GENERAL_ID_LIMIT, GENERAL_TOPIC_ID, SERVICE_NOTIFICATIONS_USER_ID,
+  SVG_EXTENSIONS,
 } from '../../config';
+import { IS_TRANSLATION_SUPPORTED } from '../../util/browser/windowEnvironment';
+import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import { findLast } from '../../util/iteratees';
 import { getMessageKey, isLocalMessageId } from '../../util/keys/messageKey';
 import { MEMO_EMPTY_ARRAY } from '../../util/memo';
 import { getServerTime } from '../../util/serverTime';
-import { IS_TRANSLATION_SUPPORTED } from '../../util/windowEnvironment';
+import { getDocumentExtension } from '../../components/common/helpers/documentInfo';
 import {
   canSendReaction,
   getAllowedAttachmentOptions,
@@ -62,7 +65,6 @@ import {
   isMessageTranslatable,
   isOwnMessage,
   isServiceNotificationMessage,
-  isUserId,
   isUserRightBanned,
 } from '../helpers';
 import { getMessageReplyInfo } from '../helpers/replies';
@@ -70,10 +72,11 @@ import {
   selectChat,
   selectChatFullInfo,
   selectChatLastMessageId,
+  selectIsChatWithBot,
   selectIsChatWithSelf,
   selectRequestedChatTranslationLanguage,
 } from './chats';
-import { selectPeer } from './peers';
+import { selectPeer, selectPeerPaidMessagesStars } from './peers';
 import { selectPeerStory } from './stories';
 import { selectIsStickerFavorite } from './symbols';
 import { selectTabState } from './tabs';
@@ -400,8 +403,9 @@ export function selectOutgoingStatus<T extends GlobalState>(
 export function selectSender<T extends GlobalState>(global: T, message: ApiMessage): ApiPeer | undefined {
   const { senderId } = message;
   const chat = selectChat(global, message.chatId);
+  const currentUser = selectUser(global, global.currentUserId!);
   if (!senderId) {
-    return chat;
+    return message.isOutgoing ? currentUser : chat;
   }
 
   if (chat && isChatChannel(chat) && !chat.areProfilesShown) return chat;
@@ -565,7 +569,7 @@ export function selectThreadIdFromMessage<T extends GlobalState>(global: T, mess
   const chat = selectChat(global, message.chatId);
   const { content } = message;
   const { replyToMsgId, replyToTopId, isForumTopic } = getMessageReplyInfo(message) || {};
-  if ('action' in content && content.action?.type === 'topicCreate') {
+  if (content.action?.type === 'topicCreate') {
     return message.id;
   }
 
@@ -648,6 +652,7 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
   const { content } = message;
   const isDocumentSticker = isMessageDocumentSticker(message);
   const isBoostMessage = message.content.action?.type === 'boostApply';
+  const isMonoforum = chat.isMonoforum;
 
   const hasChatPinPermission = (chat.isCreator
     || (!isChannel && !isUserRightBanned(chat, 'pinMessages'))
@@ -657,6 +662,7 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
 
   // https://github.com/telegramdesktop/tdesktop/blob/335095a332607c41a8d20b47e61f5bbd66366d4b/Telegram/SourceFiles/data/data_peer.cpp#L653
   const canEditMessagesIndefinitely = (() => {
+    if (content.todo) return true;
     if (isPrivate) return isChatWithSelf;
     if (isBasicGroup) return false;
     if (isSuperGroup) return hasChatPinPermission;
@@ -723,12 +729,12 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
   const canFaveSticker = !isAction && hasSticker && !hasFavoriteSticker;
   const canUnfaveSticker = !isAction && hasFavoriteSticker;
   const canCopy = !isAction;
-  const canCopyLink = !isLocal && !isAction && (isChannel || isSuperGroup);
+  const canCopyLink = !isLocal && !isAction && (isChannel || isSuperGroup) && !isMonoforum;
   const canSelect = !isLocal && !isAction;
 
   const canDownload = Boolean(content.webPage?.document || content.webPage?.video || content.webPage?.photo
-      || content.audio || content.voice || content.photo || content.video || content.document || content.sticker)
-    && !hasTtl;
+    || content.audio || content.voice || content.photo || content.video || content.document || content.sticker)
+  && !hasTtl;
 
   const canSaveGif = message.content.video?.isGif;
 
@@ -1269,6 +1275,24 @@ export function selectCanForwardMessages<T extends GlobalState>(global: T, chatI
       && (message.isForwardingAllowed || isServiceNotificationMessage(message)));
 }
 
+export function selectHasSvg<T extends GlobalState>(global: T, chatId: string, messageIds: number[]) {
+  const messages = selectChatMessages(global, chatId);
+
+  return messageIds
+    .map((id) => messages[id])
+    .some((message) => {
+      if (!message) return false;
+
+      const document = getMessageDocument(message);
+      if (!document) return false;
+
+      const extension = getDocumentExtension(document);
+      if (!extension) return false;
+
+      return SVG_EXTENSIONS.has(extension);
+    });
+}
+
 export function selectSponsoredMessage<T extends GlobalState>(global: T, chatId: string) {
   const message = global.messages.sponsoredByChatId[chatId];
 
@@ -1330,12 +1354,21 @@ export function selectShouldSchedule<T extends GlobalState>(
   return selectCurrentMessageList(global, tabId)?.type === 'scheduled';
 }
 
+export function selectCanSchedule<T extends GlobalState>(
+  global: T,
+  ...[tabId = getCurrentTabId()]: TabArgs<T>
+) {
+  const chatId = selectCurrentMessageList(global, tabId)?.chatId;
+  const paidMessagesStars = chatId ? selectPeerPaidMessagesStars(global, chatId) : undefined;
+  return !paidMessagesStars;
+}
+
 export function selectCanScheduleUntilOnline<T extends GlobalState>(global: T, id: string) {
   const isChatWithSelf = selectIsChatWithSelf(global, id);
   const chatBot = selectBot(global, id);
-  return Boolean(
-    !isChatWithSelf && !chatBot && isUserId(id) && selectUserStatus(global, id)?.wasOnline,
-  );
+  const paidMessagesStars = selectPeerPaidMessagesStars(global, id);
+  return Boolean(!paidMessagesStars
+    && !isChatWithSelf && !chatBot && isUserId(id) && selectUserStatus(global, id)?.wasOnline);
 }
 
 export function selectCustomEmojis(message: ApiMessage) {
@@ -1412,7 +1445,7 @@ export function selectReplyCanBeSentToChat<T extends GlobalState>(
   if (!replyInfo.replyToMsgId) return false;
   const fromRealChatId = replyInfo?.replyToPeerId ?? fromChatId;
   if (toChatId === fromRealChatId) return true;
-  const chatMessages = selectChatMessages(global, fromRealChatId!);
+  const chatMessages = selectChatMessages(global, fromRealChatId);
   const message = chatMessages[replyInfo.replyToMsgId];
 
   return !isExpiredMessage(message);
@@ -1432,7 +1465,10 @@ export function selectForwardsCanBeSentToChat<T extends GlobalState>(
 
   const chatFullInfo = selectChatFullInfo(global, toChatId);
   const chatMessages = selectChatMessages(global, fromChatId!);
-  const options = getAllowedAttachmentOptions(chat, chatFullInfo);
+
+  const isSavedMessages = toChatId ? selectIsChatWithSelf(global, toChatId) : undefined;
+  const isChatWithBot = toChatId ? selectIsChatWithBot(global, chat) : undefined;
+  const options = getAllowedAttachmentOptions(chat, chatFullInfo, isChatWithBot, isSavedMessages);
   return !messageIds!.some((messageId) => сheckMessageSendingDenied(chatMessages[messageId], options));
 }
 function сheckMessageSendingDenied(message: ApiMessage, options: IAllowedAttachmentOptions) {

@@ -1,5 +1,6 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, {
+import type React from '../../../lib/teact/teact';
+import {
   memo, useEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
@@ -8,6 +9,7 @@ import type {
   ApiPremiumPromo, ApiPremiumSection, ApiPremiumSubscriptionOption, ApiSticker, ApiStickerSet, ApiUser,
 } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
+import type { LangPair } from '../../../types/language';
 
 import { PREMIUM_FEATURE_SECTIONS, TME_LINK_PREFIX } from '../../../config';
 import { getUserFullName } from '../../../global/helpers';
@@ -82,6 +84,7 @@ const PREMIUM_FEATURE_COLOR_ICONS: Record<ApiPremiumSection, string> = {
   last_seen: PremiumLastSeen,
   message_privacy: PremiumMessagePrivacy,
   effects: PremiumEffects,
+  todo: PremiumBadge,
 };
 
 export type OwnProps = {
@@ -132,8 +135,7 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
   monthsAmount,
   premiumPromoOrder,
 }) => {
-  // eslint-disable-next-line no-null/no-null
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>();
   const {
     closePremiumModal, openInvoice, requestConfetti, openTelegramLink, loadStickers, openStickerSet,
   } = getActions();
@@ -148,8 +150,10 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
     if (!isOpen) {
       setHeaderHidden(true);
       setCurrentSection(undefined);
+    } else if (initialSection) {
+      setCurrentSection(initialSection);
     }
-  }, [isOpen]);
+  }, [isOpen, initialSection]);
 
   const handleOpenSection = useLastCallback((section: ApiPremiumSection) => {
     setCurrentSection(section);
@@ -291,7 +295,8 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
       ) : undefined;
       const link = (
         <span className={styles.stickerSetLink} onClick={handleOpenStatusSet}>
-          {emoji}{renderText(fromUserStatusSet.title)}
+          {emoji}
+          {renderText(fromUserStatusSet.title)}
         </span>
       );
       return [renderText(first), link, renderText(second)];
@@ -369,13 +374,13 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
               size="smaller"
               className={styles.closeButton}
               color="translucent"
-              // eslint-disable-next-line react/jsx-no-bind
+
               onClick={() => closePremiumModal()}
               ariaLabel={oldLang('Close')}
             >
               <Icon name="close" />
             </Button>
-            {fromUserStatusEmoji ? (
+            {(fromUserStatusEmoji && !isGift) ? (
               <CustomEmoji
                 className={styles.statusEmoji}
                 onClick={handleOpenStatusSet}
@@ -400,14 +405,19 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
             </div>
             <div className={buildClassName(styles.list, isPremium && styles.noButton)}>
               {filteredSections.map((section, index) => {
+                const shouldUseNewLang = section === 'todo';
                 return (
                   <PremiumFeatureItem
                     key={section}
-                    title={oldLang(PREMIUM_FEATURE_TITLES[section])}
+                    title={shouldUseNewLang
+                      ? lang(PREMIUM_FEATURE_TITLES[section] as keyof LangPair)
+                      : oldLang(PREMIUM_FEATURE_TITLES[section])}
                     text={section === 'double_limits'
                       ? oldLang(PREMIUM_FEATURE_DESCRIPTIONS[section],
                         [limitChannels, limitFolders, limitPins, limitLinks, LIMIT_ACCOUNTS])
-                      : oldLang(PREMIUM_FEATURE_DESCRIPTIONS[section])}
+                      : shouldUseNewLang
+                        ? lang(PREMIUM_FEATURE_DESCRIPTIONS[section] as keyof LangPair)
+                        : oldLang(PREMIUM_FEATURE_DESCRIPTIONS[section])}
                     icon={PREMIUM_FEATURE_COLOR_ICONS[section]}
                     index={index}
                     count={filteredSections.length}

@@ -1,12 +1,19 @@
-import React, { memo, type TeactNode } from '../../../lib/teact/teact';
+import { memo, type TeactNode } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
 import type { ApiChat, ApiMessage, ApiPeer } from '../../../api/types';
 
-import { GENERAL_TOPIC_ID, SERVICE_NOTIFICATIONS_USER_ID, TME_LINK_PREFIX } from '../../../config';
 import {
-  getMessageInvoice, getMessageText, getPeerTitle, isChatChannel,
+  GENERAL_TOPIC_ID,
+  SERVICE_NOTIFICATIONS_USER_ID,
+  TME_LINK_PREFIX,
+} from '../../../config';
+import {
+  getMainUsername,
+  getMessageInvoice, getMessageText, isChatChannel,
 } from '../../../global/helpers';
+import { getMessageContent } from '../../../global/helpers';
+import { getPeerTitle } from '../../../global/helpers/peers';
 import { getMessageReplyInfo } from '../../../global/helpers/replies';
 import {
   selectChat,
@@ -220,7 +227,7 @@ const ActionMessageText = ({
         const topicLink = (
           <Link
             className={styles.topicLink}
-            // eslint-disable-next-line react/jsx-no-bind
+
             onClick={() => openThread({ chatId, threadId: topicId })}
           >
             {iconEmojiId ? <CustomEmoji documentId={iconEmojiId} isSelectable />
@@ -242,7 +249,7 @@ const ActionMessageText = ({
         const topicLink = (
           <Link
             className={styles.topicLink}
-            // eslint-disable-next-line react/jsx-no-bind
+
             onClick={() => openThread({ chatId, threadId: topicId })}
           >
             {iconEmojiId && iconEmojiId !== DEFAULT_TOPIC_ICON_ID
@@ -262,7 +269,7 @@ const ActionMessageText = ({
         const topicPlaceholderLink = (
           <Link
             className={styles.topicLink}
-            // eslint-disable-next-line react/jsx-no-bind
+
             onClick={() => openThread({ chatId, threadId: topicId })}
           >
             {lang('ActionTopicPlaceholder')}
@@ -381,10 +388,9 @@ const ActionMessageText = ({
         if (isAttachMenu) return lang('ActionAttachMenuBotAllowed');
         if (isFromRequest) return lang('ActionWebappBotAllowed');
         if (app) {
-          const link = sender?.usernames?.length
-            && `${TME_LINK_PREFIX + sender.usernames[0].username}/${app.shortName}`;
+          const senderUsername = sender && getMainUsername(sender);
+          const link = senderUsername && `${TME_LINK_PREFIX + senderUsername}/${app.shortName}`;
           const appLink = link
-            // eslint-disable-next-line react/jsx-no-bind
             ? <Link onClick={() => openTelegramLink({ url: link })}>{app.title}</Link>
             : lang('ActionBotAppPlaceholder');
           return lang('ActionBotAllowedFromApp', { app: appLink }, { withNodes: true });
@@ -392,8 +398,8 @@ const ActionMessageText = ({
 
         if (!domain) return lang(UNSUPPORTED_LANG_KEY);
 
-        const url = ensureProtocol(domain)!;
-        // eslint-disable-next-line react/jsx-no-bind
+        const url = ensureProtocol(domain);
+
         const link = <Link onClick={() => openUrl({ url })}>{domain}</Link>;
         return lang('ActionBotAllowedFromDomain', { domain: link }, { withNodes: true });
       }
@@ -451,7 +457,7 @@ const ActionMessageText = ({
 
       case 'prizeStars':
       case 'giftCode': {
-        return lang('ActionGiftTextUnknown');
+        return translateWithYou(lang, 'ActionGiftTextUnknown', isOutgoing, undefined);
       }
 
       case 'groupCall': {
@@ -529,14 +535,14 @@ const ActionMessageText = ({
         if (isRecurringInit) {
           return lang(
             'ActionPaymentInitRecurringFor',
-            { amount: cost, user: chatLink, invoice: renderMessageLink(replyMessage!, invoiceTitle, asPreview) },
+            { amount: cost, user: chatLink, invoice: renderMessageLink(replyMessage, invoiceTitle, asPreview) },
             { withNodes: true },
           );
         }
 
         return lang(
           'ActionPaymentDoneFor',
-          { amount: cost, user: chatLink, invoice: renderMessageLink(replyMessage!, invoiceTitle, asPreview) },
+          { amount: cost, user: chatLink, invoice: renderMessageLink(replyMessage, invoiceTitle, asPreview) },
           { withNodes: true },
         );
       }
@@ -592,7 +598,7 @@ const ActionMessageText = ({
 
       case 'starGiftUnique': {
         const {
-          isTransferred, isUpgrade, savedId, peerId, fromId,
+          isTransferred, isUpgrade, savedId, peerId, fromId, resaleStars, gift,
         } = action;
 
         const isToChannel = Boolean(peerId && savedId);
@@ -600,6 +606,19 @@ const ActionMessageText = ({
         const fromPeer = fromId ? selectPeer(global, fromId) : sender;
         const fromTitle = (fromPeer && getPeerTitle(lang, fromPeer)) || userFallbackText;
         const fromLink = renderPeerLink(fromPeer?.id, fromTitle, asPreview);
+
+        if (resaleStars) {
+          return lang(
+            isOutgoing
+              ? 'ApiMessageMessageActionResaleStarGiftUniqueOutgoing'
+              : 'ApiMessageMessageActionResaleStarGiftUniqueIncoming',
+            {
+              gift: lang('GiftUnique', { title: gift.title, number: gift.number }),
+              stars: renderStrong(formatStarsAsText(lang, resaleStars)),
+            },
+            { withNodes: true },
+          );
+        }
 
         if (isToChannel) {
           const channelPeer = selectPeer(global, peerId!);
@@ -697,6 +716,179 @@ const ActionMessageText = ({
 
       case 'customAction':
         return action.message;
+
+      case 'paidMessagesPrice': {
+        const { stars, isAllowedInChannel } = action;
+        if (stars === 0) {
+          if (isChannel) {
+            return lang(
+              isAllowedInChannel ? 'ActionMessageChannelFree' : 'ActionMessageChannelDisabled',
+              { peer: chatLink },
+              { withNodes: true },
+            );
+          }
+          return translateWithYou(lang, 'ActionPaidMessagePriceFree', isOutgoing, { peer: senderLink });
+        }
+        return translateWithYou(lang, 'ActionPaidMessagePrice', isOutgoing, {
+          peer: senderLink,
+          amount: formatStarsAsText(lang, stars),
+        }, { withMarkdown: true });
+      }
+
+      case 'paidMessagesRefunded': {
+        const { stars } = action;
+        const user = selectPeer(global, chatId);
+        const userTitle = (user && getPeerTitle(lang, user)) || userFallbackText;
+
+        const key = isOutgoing
+          ? 'ApiMessageActionPaidMessagesRefundedOutgoing'
+          : 'ApiMessageActionPaidMessagesRefundedIncoming';
+
+        return lang(key, {
+          stars: formatStarsAsText(lang, stars),
+          user: renderPeerLink(user?.id, userTitle),
+        }, { withNodes: true, withMarkdown: true });
+      }
+
+      case 'todoCompletions': {
+        const { completedIds, incompletedIds } = action;
+
+        let completedItem;
+        let incompletedItem;
+        const { todo } = replyMessage ? getMessageContent(replyMessage) : {};
+        if (todo) {
+          const todoItems = todo.todo.items;
+          completedItem = todoItems.find((item) => completedIds.includes(item.id));
+          incompletedItem = todoItems.find((item) => incompletedIds.includes(item.id));
+        }
+
+        if (incompletedItem) {
+          const incompletedTaskTitle = incompletedItem.title;
+
+          const incompletedTaskLink = renderMessageLink(
+            replyMessage,
+            renderTextWithEntities({
+              text: incompletedTaskTitle.text,
+              entities: incompletedTaskTitle.entities,
+              asPreview: true,
+            }),
+            asPreview,
+          );
+
+          return translateWithYou(lang, 'MessageActionTodoCompletionsAsNotDone', isOutgoing, {
+            peer: senderLink,
+            task: incompletedTaskLink,
+          });
+        }
+
+        if (completedItem) {
+          const completedTaskTitle = completedItem.title;
+          const completedTaskLink = renderMessageLink(
+            replyMessage,
+            renderTextWithEntities({
+              text: completedTaskTitle.text,
+              entities: completedTaskTitle.entities,
+              asPreview: true,
+            }),
+            asPreview,
+          );
+
+          return translateWithYou(lang, 'MessageActionTodoCompletionsAsDone', isOutgoing, {
+            peer: senderLink,
+            task: completedTaskLink,
+          });
+        }
+
+        if (completedIds) {
+          const completedText = lang('MessageActionTodoTaskCount', {
+            count: completedIds.length,
+          }, { pluralValue: completedIds.length });
+          const completedLink = renderMessageLink(
+            replyMessage,
+            renderTextWithEntities({
+              text: completedText,
+              asPreview: true,
+            }),
+            asPreview,
+            { noEllipsis: true },
+          );
+          return translateWithYou(lang, 'MessageActionTodoCompletionsAsDone', isOutgoing, {
+            peer: senderLink,
+            task: completedLink,
+          });
+        }
+
+        const incompletedText = lang('MessageActionTodoTaskCount', {
+          count: incompletedIds.length,
+        }, { pluralValue: incompletedIds.length });
+        const incompletedLink = renderMessageLink(
+          replyMessage,
+          renderTextWithEntities({
+            text: incompletedText,
+            asPreview: true,
+          }),
+          asPreview,
+          { noEllipsis: true },
+        );
+
+        return translateWithYou(lang, 'MessageActionTodoCompletionsAsNotDone', isOutgoing, {
+          peer: senderLink,
+          task: incompletedLink,
+        });
+      }
+
+      case 'todoAppendTasks': {
+        const { items } = action;
+        const { todo } = replyMessage ? getMessageContent(replyMessage) : {};
+
+        const listTitle = todo?.todo.title.text || '';
+        const listLink = renderMessageLink(
+          replyMessage,
+          renderTextWithEntities({
+            text: listTitle,
+            asPreview: true,
+          }),
+          asPreview,
+        );
+
+        if (items.length === 1) {
+          const taskTitle = items[0].title;
+          const taskLink = renderMessageLink(
+            replyMessage,
+            renderTextWithEntities({
+              text: taskTitle.text,
+              entities: taskTitle.entities,
+              asPreview: true,
+            }),
+            asPreview,
+          );
+
+          return translateWithYou(lang, 'MessageActionAppendTodo', isOutgoing, {
+            peer: senderLink,
+            task: taskLink,
+            list: listLink,
+          });
+        }
+
+        const tasksText = lang('MessageActionTodoTaskCount', {
+          count: items.length,
+        }, { pluralValue: items.length });
+        const tasksLink = renderMessageLink(
+          replyMessage,
+          renderTextWithEntities({
+            text: tasksText,
+            asPreview: true,
+          }),
+          asPreview,
+          { noEllipsis: true },
+        );
+
+        return translateWithYou(lang, 'MessageActionAppendTodoMultiple', isOutgoing, {
+          peer: senderLink,
+          tasks: tasksLink,
+          list: listLink,
+        });
+      }
 
       case 'phoneCall': // Rendered as a regular message, but considered an action for the summary
         return lang(getCallMessageKey(action, isOutgoing));

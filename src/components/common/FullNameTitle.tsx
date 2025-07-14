@@ -1,5 +1,6 @@
 import type { FC } from '../../lib/teact/teact';
-import React, { memo, useMemo } from '../../lib/teact/teact';
+import type React from '../../lib/teact/teact';
+import { memo, useMemo } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import type {
@@ -15,14 +16,15 @@ import {
   isAnonymousForwardsChat,
   isChatWithRepliesBot,
   isChatWithVerificationCodesBot,
-  isPeerUser,
 } from '../../global/helpers';
+import { isApiPeerUser } from '../../global/helpers/peers';
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
 import { copyTextToClipboard } from '../../util/clipboard';
 import stopEvent from '../../util/stopEvent';
 import renderText from './helpers/renderText';
 
+import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
 
@@ -43,12 +45,14 @@ type OwnProps = {
   emojiStatusSize?: number;
   isSavedMessages?: boolean;
   isSavedDialog?: boolean;
+  isMonoforum?: boolean;
+  monoforumBadgeClassName?: string;
   noLoopLimit?: boolean;
   canCopyTitle?: boolean;
   iconElement?: React.ReactNode;
+  statusSparklesColor?: string;
   onEmojiStatusClick?: NoneToVoidFunction;
   observeIntersection?: ObserveFn;
-  statusSparklesColor?: string;
 };
 
 const FullNameTitle: FC<OwnProps> = ({
@@ -63,19 +67,25 @@ const FullNameTitle: FC<OwnProps> = ({
   noLoopLimit,
   canCopyTitle,
   iconElement,
+  statusSparklesColor,
+  isMonoforum,
+  monoforumBadgeClassName,
   onEmojiStatusClick,
   observeIntersection,
-  statusSparklesColor,
 }) => {
-  const lang = useOldLang();
   const { showNotification } = getActions();
+
+  const oldLang = useOldLang();
+  const lang = useLang();
+
   const realPeer = 'id' in peer ? peer : undefined;
   const customPeer = 'isCustomPeer' in peer ? peer : undefined;
-  const isUser = realPeer && isPeerUser(realPeer);
-  const title = realPeer && (isUser ? getUserFullName(realPeer) : getChatTitle(lang, realPeer));
-  const isPremium = isUser && realPeer.isPremium;
-  const canShowEmojiStatus = withEmojiStatus && !isSavedMessages && realPeer;
-  const emojiStatus = realPeer?.emojiStatus;
+  const isUser = realPeer && isApiPeerUser(realPeer);
+  const title = realPeer && (isUser ? getUserFullName(realPeer) : getChatTitle(oldLang, realPeer));
+  const isPremium = (isUser && realPeer.isPremium) || customPeer?.isPremium;
+  const canShowEmojiStatus = withEmojiStatus && !isSavedMessages;
+  const emojiStatus = realPeer?.emojiStatus
+    || (customPeer?.emojiStatusId ? { type: 'regular', documentId: customPeer.emojiStatusId } : undefined);
 
   const handleTitleClick = useLastCallback((e) => {
     if (!title || !canCopyTitle) {
@@ -89,27 +99,27 @@ const FullNameTitle: FC<OwnProps> = ({
 
   const specialTitle = useMemo(() => {
     if (customPeer) {
-      return customPeer.title || lang(customPeer.titleKey!);
+      return renderText(customPeer.title || oldLang(customPeer.titleKey!));
     }
 
     if (isSavedMessages) {
-      return lang(isSavedDialog ? 'MyNotes' : 'SavedMessages');
+      return oldLang(isSavedDialog ? 'MyNotes' : 'SavedMessages');
     }
 
     if (isAnonymousForwardsChat(realPeer!.id)) {
-      return lang('AnonymousForward');
+      return oldLang('AnonymousForward');
     }
 
     if (isChatWithRepliesBot(realPeer!.id)) {
-      return lang('RepliesTitle');
+      return oldLang('RepliesTitle');
     }
 
     if (isChatWithVerificationCodesBot(realPeer!.id)) {
-      return lang('VerifyCodesNotifications');
+      return oldLang('VerifyCodesNotifications');
     }
 
     return undefined;
-  }, [customPeer, isSavedDialog, isSavedMessages, lang, realPeer]);
+  }, [customPeer, isSavedDialog, isSavedMessages, oldLang, realPeer]);
   const botVerificationIconId = realPeer?.botVerificationIconId;
 
   return (
@@ -140,11 +150,12 @@ const FullNameTitle: FC<OwnProps> = ({
           {!noFake && peer?.fakeType && <FakeIcon fakeType={peer.fakeType} />}
           {canShowEmojiStatus && emojiStatus && (
             <Transition
-              className={styles.transition}
+              className={styles.statusTransition}
+              slideClassName={styles.statusTransitionSlide}
               activeKey={Number(emojiStatus.documentId)}
-              name="fade"
+              name="slideFade"
+              direction={-1}
               shouldCleanup
-              shouldRestoreHeight
             >
               <CustomEmoji
                 forceAlways
@@ -161,6 +172,11 @@ const FullNameTitle: FC<OwnProps> = ({
             </Transition>
           )}
           {canShowEmojiStatus && !emojiStatus && isPremium && <StarIcon />}
+          {isMonoforum && (
+            <div className={buildClassName(styles.monoforumBadge, monoforumBadgeClassName)}>
+              {lang('MonoforumBadge')}
+            </div>
+          )}
         </>
       )}
       {iconElement}

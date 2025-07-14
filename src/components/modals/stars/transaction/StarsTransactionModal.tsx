@@ -1,5 +1,5 @@
 import type { FC } from '../../../../lib/teact/teact';
-import React, { memo, useMemo } from '../../../../lib/teact/teact';
+import { memo, useMemo } from '../../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../../global';
 
 import type {
@@ -10,7 +10,10 @@ import type { TabState } from '../../../../global/types';
 import { MediaViewerOrigin } from '../../../../types';
 
 import { getMessageLink } from '../../../../global/helpers';
-import { buildStarsTransactionCustomPeer, formatStarsTransactionAmount } from '../../../../global/helpers/payments';
+import {
+  buildStarsTransactionCustomPeer,
+  formatStarsTransactionAmount,
+} from '../../../../global/helpers/payments';
 import {
   selectCanPlayAnimatedEmojis,
   selectGiftStickerForStars,
@@ -19,6 +22,8 @@ import {
 import buildClassName from '../../../../util/buildClassName';
 import { copyTextToClipboard } from '../../../../util/clipboard';
 import { formatDateTimeToString } from '../../../../util/dates/dateFormat';
+import { formatStarsAsIcon } from '../../../../util/localization/format';
+import { formatPercent } from '../../../../util/textFormat';
 import { getGiftAttributes, getStickerFromGift } from '../../../common/helpers/gifts';
 import { getTransactionTitle, isNegativeStarsAmount } from '../helpers/transaction';
 
@@ -48,10 +53,15 @@ type StateProps = {
   peer?: ApiPeer;
   canPlayAnimatedEmojis?: boolean;
   topSticker?: ApiSticker;
+  paidMessageCommission?: number;
 };
 
 const StarsTransactionModal: FC<OwnProps & StateProps> = ({
-  modal, peer, canPlayAnimatedEmojis, topSticker,
+  modal,
+  peer,
+  canPlayAnimatedEmojis,
+  topSticker,
+  paidMessageCommission,
 }) => {
   const { showNotification, openMediaViewer, closeStarsTransactionModal } = getActions();
 
@@ -75,7 +85,8 @@ const StarsTransactionModal: FC<OwnProps & StateProps> = ({
     }
 
     const {
-      giveawayPostId, photo, stars, isGiftUpgrade, starGift,
+      giveawayPostId, photo, stars, isGiftUpgrade, starGift, isGiftResale,
+      starRefCommision,
     } = transaction;
 
     const gift = transaction?.starGift;
@@ -85,16 +96,16 @@ const StarsTransactionModal: FC<OwnProps & StateProps> = ({
     const giftAttributes = isUniqueGift ? getGiftAttributes(gift) : undefined;
 
     const customPeer = (transaction.peer && transaction.peer.type !== 'peer'
-        && buildStarsTransactionCustomPeer(transaction.peer)) || undefined;
+      && buildStarsTransactionCustomPeer(transaction.peer)) || undefined;
 
     const peerId = transaction.peer?.type === 'peer' ? transaction.peer.id : undefined;
     const toName = transaction.peer && oldLang(getStarsPeerTitleKey(transaction.peer));
 
-    const title = getTransactionTitle(oldLang, transaction);
+    const title = getTransactionTitle(oldLang, lang, transaction);
 
     const messageLink = peer && transaction.messageId && !isGiftUpgrade
       ? getMessageLink(peer, undefined, transaction.messageId) : undefined;
-    const giveawayMessageLink = peer && giveawayPostId && getMessageLink(peer, undefined, giveawayPostId);
+    const giveawayMessageLink = peer && giveawayPostId ? getMessageLink(peer, undefined, giveawayPostId) : undefined;
 
     const media = transaction.extendedMedia;
 
@@ -121,6 +132,7 @@ const StarsTransactionModal: FC<OwnProps & StateProps> = ({
           modelAttribute={giftAttributes!.model!}
           title={gift.title}
           subtitle={lang('GiftInfoCollectible', { number: gift.number })}
+          resellPrice={transaction.stars}
         />
       </div>
     );
@@ -153,7 +165,7 @@ const StarsTransactionModal: FC<OwnProps & StateProps> = ({
             draggable={false}
           />
         )}
-        {title && <h1 className={styles.title}>{title}</h1>}
+        {Boolean(title) && <h1 className={styles.title}>{title}</h1>}
         <p className={styles.description}>{description}</p>
         <p className={styles.amount}>
           <span
@@ -162,13 +174,28 @@ const StarsTransactionModal: FC<OwnProps & StateProps> = ({
             {formatStarsTransactionAmount(lang, stars)}
           </span>
           <StarIcon type="gold" size="middle" />
+          {transaction.isRefund && (
+            <p className={styles.refunded}>{lang('Refunded')}</p>
+          )}
         </p>
+        {Boolean(transaction.paidMessages && transaction.starRefCommision && paidMessageCommission) && (
+          <p className={styles.description}>
+            {lang(
+              'PaidMessageTransactionDescription',
+              { percent: formatPercent(paidMessageCommission! / 10) },
+              {
+                withNodes: true,
+                withMarkdown: true,
+              },
+            )}
+          </p>
+        )}
       </div>
     );
 
     const tableData: TableData = [];
 
-    if (transaction.starRefCommision) {
+    if (transaction && starRefCommision && !transaction.paidMessages && !isGiftResale) {
       tableData.push([
         oldLang('StarsTransaction.StarRefReason.Title'),
         oldLang('StarsTransaction.StarRefReason.Program'),
@@ -182,12 +209,21 @@ const StarsTransactionModal: FC<OwnProps & StateProps> = ({
       ]);
     }
 
+    if (isGiftResale) {
+      tableData.push([
+        oldLang('StarGiftReason'),
+        isNegativeStarsAmount(transaction.stars)
+          ? lang('StarGiftSaleTransaction')
+          : lang('StarGiftPurchaseTransaction'),
+      ]);
+    }
+
     let peerLabel;
     if (isGiftUpgrade) {
       peerLabel = oldLang('Stars.Transaction.GiftFrom');
     } else if (isNegativeStarsAmount(stars) || transaction.isMyGift) {
       peerLabel = oldLang('Stars.Transaction.To');
-    } else if (transaction.starRefCommision) {
+    } else if (transaction.starRefCommision && !transaction.paidMessages && !isGiftResale) {
       peerLabel = oldLang('StarsTransaction.StarRefReason.Miniapp');
     } else if (peerId) {
       peerLabel = oldLang('Star.Transaction.From');
@@ -199,6 +235,15 @@ const StarsTransactionModal: FC<OwnProps & StateProps> = ({
       peerLabel,
       peerId ? { chatId: peerId } : toName || '',
     ]);
+
+    if (transaction.starRefCommision && transaction.paidMessages) {
+      tableData.push([
+        lang('PaidMessageTransactionTotal'),
+        formatStarsAsIcon(lang,
+          transaction.stars.amount / ((100 - transaction.starRefCommision) / 100),
+          { asFont: false, className: styles.starIcon, containerClassName: styles.totalStars }),
+      ]);
+    }
 
     if (messageLink) {
       tableData.push([oldLang('Stars.Transaction.Reaction.Post'), <SafeLink url={messageLink} text={messageLink} />]);
@@ -252,7 +297,7 @@ const StarsTransactionModal: FC<OwnProps & StateProps> = ({
       tableData,
       footer,
     };
-  }, [transaction, oldLang, lang, peer, canPlayAnimatedEmojis, topSticker]);
+  }, [transaction, oldLang, lang, peer, canPlayAnimatedEmojis, topSticker, paidMessageCommission]);
 
   const prevModalData = usePrevious(starModalData);
   const renderingModalData = prevModalData || starModalData;
@@ -275,6 +320,7 @@ export default memo(withGlobal<OwnProps>(
   (global, { modal }): StateProps => {
     const peerId = modal?.transaction?.peer?.type === 'peer' && modal.transaction.peer.id;
     const peer = peerId ? selectPeer(global, peerId) : undefined;
+    const paidMessageCommission = global.appConfig?.starsPaidMessageCommissionPermille;
 
     const starCount = modal?.transaction.stars;
     const starsGiftSticker = modal?.transaction.isGift && selectGiftStickerForStars(global, starCount?.amount);
@@ -283,6 +329,7 @@ export default memo(withGlobal<OwnProps>(
       peer,
       canPlayAnimatedEmojis: selectCanPlayAnimatedEmojis(global),
       topSticker: starsGiftSticker,
+      paidMessageCommission,
     };
   },
 )(StarsTransactionModal));

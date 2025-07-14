@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from '../../../../lib/teact/teact';
+import { memo, useMemo } from '../../../../lib/teact/teact';
 import { getActions } from '../../../../global';
 
 import type {
@@ -8,8 +8,8 @@ import type {
 import type { GlobalState } from '../../../../global/types';
 import type { CustomPeer } from '../../../../types';
 
-import { getPeerTitle } from '../../../../global/helpers';
 import { buildStarsTransactionCustomPeer, formatStarsTransactionAmount } from '../../../../global/helpers/payments';
+import { getPeerTitle } from '../../../../global/helpers/peers';
 import { selectPeer } from '../../../../global/selectors';
 import buildClassName from '../../../../util/buildClassName';
 import { formatDateTimeToString } from '../../../../util/dates/dateFormat';
@@ -64,7 +64,7 @@ const StarsTransactionItem = ({ transaction, className }: OwnProps) => {
   const giftSticker = starGift && getStickerFromGift(starGift);
 
   const data = useMemo(() => {
-    let title = getTransactionTitle(oldLang, transaction);
+    let title = getTransactionTitle(oldLang, lang, transaction);
     let description;
     let status: string | undefined;
     let avatarPeer: ApiPeer | CustomPeer | undefined;
@@ -80,7 +80,11 @@ const StarsTransactionItem = ({ transaction, className }: OwnProps) => {
     }
 
     if (transaction.isGiftUpgrade && transaction.starGift?.type === 'starGiftUnique') {
-      description = transaction.starGift.title;
+      description = lang('GiftUnique', { title: transaction.starGift.title, number: transaction.starGift.number });
+    }
+
+    if (transaction.isGiftResale && transaction.starGift?.type === 'starGiftUnique') {
+      description = lang('GiftUnique', { title: transaction.starGift.title, number: transaction.starGift.number });
     }
 
     if (transaction.photo) {
@@ -105,7 +109,7 @@ const StarsTransactionItem = ({ transaction, className }: OwnProps) => {
       avatarPeer,
       status,
     };
-  }, [oldLang, peer, transaction]);
+  }, [oldLang, lang, peer, transaction]);
 
   const previewContent = useMemo(() => {
     if (isUniqueGift) {

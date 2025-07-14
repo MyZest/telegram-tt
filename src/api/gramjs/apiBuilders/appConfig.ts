@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
 
@@ -10,6 +9,9 @@ import {
   SERVICE_NOTIFICATIONS_USER_ID,
   STORY_EXPIRE_PERIOD,
   STORY_VIEWERS_EXPIRE_PERIOD,
+  TODO_ITEM_LENGTH_LIMIT,
+  TODO_ITEMS_LIMIT,
+  TODO_TITLE_LENGTH_LIMIT,
 } from '../../../config';
 import localDb from '../localDb';
 import { buildJson } from './misc';
@@ -87,6 +89,22 @@ export interface GramJsAppConfig extends LimitsConfig {
   stargifts_convert_period_max?: number;
   starref_start_param_prefixes?: string[];
   ton_blockchain_explorer_url?: string;
+  stars_paid_messages_available?: boolean;
+  stars_usd_withdraw_rate_x1000?: number;
+  stars_paid_message_commission_permille?: number;
+  stars_paid_message_amount_max?: number;
+  stargifts_pinned_to_top_limit?: number;
+  freeze_since_date?: number;
+  freeze_until_date?: number;
+  freeze_appeal_url?: string;
+  channel_autotranslation_level_min?: number;
+  stars_stargift_resale_amount_max?: number;
+  stars_stargift_resale_amount_min?: number;
+  stars_stargift_resale_commission_permille?: number;
+  poll_answers_max?: number;
+  todo_items_max?: number;
+  todo_title_length_max?: number;
+  todo_item_length_max?: number;
 }
 
 function buildEmojiSounds(appConfig: GramJsAppConfig) {
@@ -154,6 +172,7 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
       chatlistJoined: getLimit(appConfig, 'chatlist_joined_limit', 'chatlistJoined'),
       recommendedChannels: getLimit(appConfig, 'recommended_channels_limit', 'recommendedChannels'),
       savedDialogsPinned: getLimit(appConfig, 'saved_dialogs_pinned_limit', 'savedDialogsPinned'),
+      moreAccounts: DEFAULT_LIMITS.moreAccounts,
     },
     hash,
     areStoriesHidden: appConfig.stories_all_hidden,
@@ -163,10 +182,15 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
     maxPinnedStoriesCount: appConfig.stories_pinned_to_top_count_max,
     groupTranscribeLevelMin: appConfig.group_transcribe_level_min,
     canLimitNewMessagesWithoutPremium: appConfig.new_noncontact_peers_require_premium_without_ownpremium,
+    starsPaidMessagesAvailable: appConfig.stars_paid_messages_available,
+    starsPaidMessageCommissionPermille: appConfig.stars_paid_message_commission_permille,
+    starsPaidMessageAmountMax: appConfig.stars_paid_message_amount_max,
+    starsUsdWithdrawRateX1000: appConfig.stars_usd_withdraw_rate_x1000,
     bandwidthPremiumNotifyPeriod: appConfig.upload_premium_speedup_notify_period,
     bandwidthPremiumUploadSpeedup: appConfig.upload_premium_speedup_upload,
     bandwidthPremiumDownloadSpeedup: appConfig.upload_premium_speedup_download,
     channelRestrictAdsLevelMin: appConfig.channel_restrict_sponsored_level_min,
+    channelAutoTranslationLevelMin: appConfig.channel_autotranslation_level_min,
     paidReactionMaxAmount: appConfig.stars_paid_reaction_amount_max,
     isChannelRevenueWithdrawalEnabled: appConfig.channel_revenue_withdrawal_enabled,
     isStarsGiftEnabled: appConfig.stars_gifts_enabled,
@@ -174,5 +198,16 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
     starGiftMaxConvertPeriod: appConfig.stargifts_convert_period_max,
     starRefStartPrefixes: appConfig.starref_start_param_prefixes,
     tonExplorerUrl: appConfig.ton_blockchain_explorer_url,
+    savedGiftPinLimit: appConfig.stargifts_pinned_to_top_limit,
+    freezeSinceDate: appConfig.freeze_since_date,
+    freezeUntilDate: appConfig.freeze_until_date,
+    freezeAppealUrl: appConfig.freeze_appeal_url,
+    starsStargiftResaleAmountMin: appConfig.stars_stargift_resale_amount_min,
+    starsStargiftResaleAmountMax: appConfig.stars_stargift_resale_amount_max,
+    starsStargiftResaleCommissionPermille: appConfig.stars_stargift_resale_commission_permille,
+    pollMaxAnswers: appConfig.poll_answers_max,
+    todoItemsMax: appConfig.todo_items_max ?? TODO_ITEMS_LIMIT,
+    todoTitleLengthMax: appConfig.todo_title_length_max ?? TODO_TITLE_LENGTH_LIMIT,
+    todoItemLengthMax: appConfig.todo_item_length_max ?? TODO_ITEM_LENGTH_LIMIT,
   };
 }

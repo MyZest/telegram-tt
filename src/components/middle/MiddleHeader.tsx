@@ -1,5 +1,6 @@
 import type { FC } from '../../lib/teact/teact';
-import React, {
+import type React from '../../lib/teact/teact';
+import {
   memo, useRef,
 } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
@@ -18,7 +19,6 @@ import {
 } from '../../config';
 import {
   getIsSavedDialog,
-  isUserId,
 } from '../../global/helpers';
 import {
   selectChat,
@@ -26,6 +26,7 @@ import {
   selectIsChatWithSelf,
   selectIsInSelectMode,
   selectIsRightColumnShown,
+  selectPeer,
   selectPinnedIds,
   selectScheduledIds,
   selectTabState,
@@ -33,6 +34,7 @@ import {
   selectThreadParam,
 } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
+import { isUserId } from '../../util/entities/ids';
 
 import useAppLayout from '../../hooks/useAppLayout';
 import useConnectionStatus from '../../hooks/useConnectionStatus';
@@ -136,8 +138,7 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
   const isLeftColumnHideable = windowWidth <= MIN_SCREEN_WIDTH_FOR_STATIC_LEFT_COLUMN;
   const shouldShowCloseButton = isTablet && isLeftColumnShown;
 
-  // eslint-disable-next-line no-null/no-null
-  const componentRef = useRef<HTMLDivElement>(null);
+  const componentRef = useRef<HTMLDivElement>();
 
   const handleOpenSearch = useLastCallback(() => {
     updateMiddleSearch({ chatId, threadId, update: {} });
@@ -260,6 +261,8 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
     const savedMessagesStatus = isSavedDialog ? lang('SavedMessages') : undefined;
 
     const realChatId = isSavedDialog ? String(threadId) : chatId;
+
+    const displayChatId = chat?.isMonoforum ? chat.linkedMonoforumId! : realChatId;
     return (
       <>
         {(isLeftColumnHideable || currentTransitionKey > 0) && renderBackButton(shouldShowCloseButton, !isSavedDialog)}
@@ -271,10 +274,10 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
           onTouchStart={handleLongPressTouchStart}
           onTouchEnd={handleLongPressTouchEnd}
         >
-          {isUserId(realChatId) ? (
+          {isUserId(displayChatId) ? (
             <PrivateChatInfo
-              key={realChatId}
-              userId={realChatId}
+              key={displayChatId}
+              userId={displayChatId}
               typingStatus={typingStatus}
               status={connectionStatusText || savedMessagesStatus}
               withDots={Boolean(connectionStatusText)}
@@ -290,10 +293,11 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
             />
           ) : (
             <GroupChatInfo
-              key={realChatId}
-              chatId={realChatId}
+              key={displayChatId}
+              chatId={displayChatId}
               threadId={!isSavedDialog ? threadId : undefined}
               typingStatus={typingStatus}
+              withMonoforumStatus={chat?.isMonoforum}
               status={connectionStatusText || savedMessagesStatus}
               withDots={Boolean(connectionStatusText)}
               withMediaViewer={threadId === MAIN_THREAD_ID}
@@ -377,6 +381,7 @@ export default memo(withGlobal<OwnProps>(
       isLeftColumnShown, shouldSkipHistoryAnimations, audioPlayer, messageLists,
     } = selectTabState(global);
     const chat = selectChat(global, chatId);
+    const peer = selectPeer(global, chatId);
 
     const { chatId: audioChatId, messageId: audioMessageId } = audioPlayer;
     const audioMessage = audioChatId && audioMessageId
@@ -397,7 +402,7 @@ export default memo(withGlobal<OwnProps>(
 
     const typingStatus = selectThreadParam(global, chatId, threadId, 'typingStatus');
 
-    const emojiStatus = chat?.emojiStatus;
+    const emojiStatus = peer?.emojiStatus;
     const emojiStatusSticker = emojiStatus && global.customEmojis.byId[emojiStatus.documentId];
     const emojiStatusSlug = emojiStatus?.type === 'collectible' ? emojiStatus.slug : undefined;
 

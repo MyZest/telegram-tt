@@ -1,14 +1,15 @@
-import React, { memo, useMemo, useRef } from '../../../../lib/teact/teact';
+import { memo, useMemo, useRef } from '../../../../lib/teact/teact';
 import { withGlobal } from '../../../../global';
 
 import type { ApiMessage, ApiPeer } from '../../../../api/types';
 import type { ApiMessageActionStarGiftUnique } from '../../../../api/types/messageActions';
 
-import { getPeerTitle } from '../../../../global/helpers';
+import { getPeerTitle } from '../../../../global/helpers/peers';
 import {
   selectCanPlayAnimatedEmojis,
   selectPeer,
   selectSender,
+  selectUser,
 } from '../../../../global/selectors';
 import buildClassName from '../../../../util/buildClassName';
 import buildStyle from '../../../../util/buildStyle';
@@ -52,8 +53,7 @@ const StarGiftAction = ({
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
 }: OwnProps & StateProps) => {
-  // eslint-disable-next-line no-null/no-null
-  const stickerRef = useRef<HTMLDivElement>(null);
+  const stickerRef = useRef<HTMLDivElement>();
   const lang = useLang();
 
   const { isOutgoing } = message;
@@ -72,7 +72,8 @@ const StarGiftAction = ({
     [lang('ActionStarGiftUniqueSymbol'), pattern.name],
   ], [lang, model, pattern, backdrop]);
 
-  const peer = isOutgoing ? recipient : sender;
+  const shouldShowFrom = !isOutgoing || action.isUpgrade;
+  const peer = shouldShowFrom && !action.isUpgrade ? sender : recipient;
 
   const fallbackPeerTitle = lang('ActionFallbackSomeone');
   const peerTitle = peer && getPeerTitle(lang, peer);
@@ -117,7 +118,7 @@ const StarGiftAction = ({
       <div className={styles.info}>
         <h3 className={styles.title}>
           {isSelf ? lang('ActionStarGiftSelf') : lang(
-            isOutgoing ? 'ActionStarGiftTo' : 'ActionStarGiftFrom',
+            shouldShowFrom ? 'ActionStarGiftFrom' : 'ActionStarGiftTo',
             {
               peer: renderPeerLink(peer?.id, peerTitle || fallbackPeerTitle),
             },
@@ -144,10 +145,11 @@ const StarGiftAction = ({
 
 export default memo(withGlobal<OwnProps>(
   (global, { message, action }): StateProps => {
+    const currentUser = selectUser(global, global.currentUserId!);
     const canPlayAnimatedEmojis = selectCanPlayAnimatedEmojis(global);
     const messageSender = selectSender(global, message);
     const giftSender = action.fromId ? selectPeer(global, action.fromId) : undefined;
-    const messageRecipient = selectPeer(global, message.chatId);
+    const messageRecipient = message.isOutgoing ? selectPeer(global, message.chatId) : currentUser;
     const giftRecipient = action.peerId ? selectPeer(global, action.peerId) : undefined;
 
     return {

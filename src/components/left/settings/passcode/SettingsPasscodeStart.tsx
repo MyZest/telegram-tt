@@ -1,5 +1,5 @@
 import type { FC } from '../../../../lib/teact/teact';
-import React, { memo } from '../../../../lib/teact/teact';
+import { memo } from '../../../../lib/teact/teact';
 
 import { STICKER_SIZE_PASSCODE } from '../../../../config';
 import { LOCAL_TGS_URLS } from '../../../common/helpers/animatedAssets';
@@ -44,7 +44,7 @@ const SettingsPasscodeStart: FC<OwnProps> = ({
         </p>
       </div>
 
-      <div className="settings-item pt-2">
+      <div className="settings-item settings-group">
         <Button onClick={onStart}>{lang('EnablePasscode')}</Button>
       </div>
     </div>

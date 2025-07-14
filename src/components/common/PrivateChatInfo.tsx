@@ -1,5 +1,6 @@
 import type { FC } from '../../lib/teact/teact';
-import React, { memo, useEffect, useMemo } from '../../lib/teact/teact';
+import type React from '../../lib/teact/teact';
+import { memo, useEffect, useMemo } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type {
@@ -111,6 +112,8 @@ const PrivateChatInfo: FC<OwnProps & StateProps> = ({
   const lang = useOldLang();
 
   const { id: userId } = user || {};
+
+  const hasAvatarMediaViewer = withMediaViewer && !isSavedMessages;
 
   useEffect(() => {
     if (userId) {
@@ -246,7 +249,7 @@ const PrivateChatInfo: FC<OwnProps & StateProps> = ({
         withStory={withStory}
         storyViewerOrigin={storyViewerOrigin}
         storyViewerMode="single-peer"
-        onClick={withMediaViewer ? handleAvatarViewerOpen : undefined}
+        onClick={hasAvatarMediaViewer ? handleAvatarViewerOpen : undefined}
       />
       <div className="info">
         {renderNameTitle()}

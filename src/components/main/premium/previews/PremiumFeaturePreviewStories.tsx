@@ -1,4 +1,4 @@
-import React, { memo, useLayoutEffect, useRef } from '../../../../lib/teact/teact';
+import { memo, useLayoutEffect, useRef } from '../../../../lib/teact/teact';
 import { withGlobal } from '../../../../global';
 
 import type { ApiUser } from '../../../../api/types';
@@ -44,7 +44,7 @@ const STORY_FEATURE_DESCRIPTIONS = {
 
 const STORY_FEATURE_ICONS: Record<string, IconName> = {
   stories_order: 'story-priority',
-  stories_stealth: 'eye-closed-outline',
+  stories_stealth: 'eye-crossed-outline',
   stories_views: 'eye-outline',
   stories_timer: 'timer',
   stories_save: 'arrow-down-circle',
@@ -61,8 +61,7 @@ const CIRCLE_READ_SEGMENTS = 0;
 const PremiumFeaturePreviewVideo = ({
   currentUser,
 }: StateProps) => {
-  // eslint-disable-next-line no-null/no-null
-  const circleRef = useRef<HTMLCanvasElement>(null);
+  const circleRef = useRef<HTMLCanvasElement>();
 
   const lang = useOldLang();
 

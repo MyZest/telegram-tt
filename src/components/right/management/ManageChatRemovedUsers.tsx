@@ -1,5 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, { memo, useCallback } from '../../../lib/teact/teact';
+import { memo, useCallback } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiChat, ApiChatMember, ApiUser } from '../../../api/types';
@@ -83,7 +83,7 @@ const ManageChatRemovedUsers: FC<OwnProps & StateProps> = ({
 
   return (
     <div className="Management">
-      <div className="custom-scroll">
+      <div className="panel-content custom-scroll">
         <div className="section" dir={lang.isRtl ? 'rtl' : undefined}>
           <p className="section-help">{lang(isChannel ? 'NoBlockedChannel2' : 'NoBlockedGroup2')}</p>
 

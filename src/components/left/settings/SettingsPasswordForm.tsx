@@ -1,5 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, { memo, useCallback, useState } from '../../../lib/teact/teact';
+import { memo, useCallback, useState } from '../../../lib/teact/teact';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useOldLang from '../../../hooks/useOldLang';
@@ -67,7 +67,7 @@ const SettingsPasswordForm: FC<OwnProps> = ({
         <PasswordMonkey isBig isPasswordVisible={shouldShowPassword} />
       </div>
 
-      <div className="settings-item pt-2">
+      <div className="settings-item settings-group">
         <PasswordForm
           error={validationError || error}
           hint={hint}

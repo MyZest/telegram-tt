@@ -1,5 +1,6 @@
-import type { FC, TeactNode } from '../../lib/teact/teact';
-import React, { beginHeavyAnimation, useEffect } from '../../lib/teact/teact';
+import type { ElementRef, FC, TeactNode } from '../../lib/teact/teact';
+import type React from '../../lib/teact/teact';
+import { beginHeavyAnimation, useEffect } from '../../lib/teact/teact';
 
 import type { TextPart } from '../../types';
 
@@ -17,6 +18,7 @@ import useShowTransition from '../../hooks/useShowTransition';
 
 import Icon from '../common/icons/Icon';
 import Button, { type OwnProps as ButtonProps } from './Button';
+import ModalStarBalanceBar from './ModalStarBalanceBar';
 import Portal from './Portal';
 
 import './Modal.scss';
@@ -39,13 +41,15 @@ export type OwnProps = {
   children: React.ReactNode;
   style?: string;
   dialogStyle?: string;
-  dialogRef?: React.RefObject<HTMLDivElement>;
+  dialogRef?: ElementRef<HTMLDivElement>;
   isLowStackPriority?: boolean;
   dialogContent?: React.ReactNode;
   ignoreFreeze?: boolean;
   onClose: () => void;
   onCloseAnimationEnd?: () => void;
   onEnter?: () => void;
+  withBalanceBar?: boolean;
+  isCondensedHeader?: boolean;
 };
 
 const Modal: FC<OwnProps> = ({
@@ -70,6 +74,8 @@ const Modal: FC<OwnProps> = ({
   onClose,
   onCloseAnimationEnd,
   onEnter,
+  withBalanceBar,
+  isCondensedHeader,
 }) => {
   const {
     ref: modalRef,
@@ -154,7 +160,7 @@ const Modal: FC<OwnProps> = ({
     }
 
     return (
-      <div className={buildClassName('modal-header', headerClassName)}>
+      <div className={buildClassName('modal-header', headerClassName, isCondensedHeader && 'modal-header-condensed')}>
         {withCloseButton && closeButton}
         <div className="modal-title">{title}</div>
       </div>
@@ -167,6 +173,7 @@ const Modal: FC<OwnProps> = ({
     noBackdrop && 'transparent-backdrop',
     isSlim && 'slim',
     isLowStackPriority && 'low-priority',
+    withBalanceBar && 'with-balance-bar',
   );
 
   return (
@@ -177,6 +184,11 @@ const Modal: FC<OwnProps> = ({
         tabIndex={-1}
         role="dialog"
       >
+        {withBalanceBar && (
+          <ModalStarBalanceBar
+            isModalOpen={isOpen}
+          />
+        )}
         <div className="modal-container">
           <div className="modal-backdrop" onClick={!noBackdropClose ? onClose : undefined} />
           <div className="modal-dialog" ref={dialogRef} style={dialogStyle}>

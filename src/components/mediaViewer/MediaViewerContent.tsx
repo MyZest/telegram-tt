@@ -1,4 +1,5 @@
-import React, { memo } from '../../lib/teact/teact';
+import type React from '../../lib/teact/teact';
+import { memo } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type {
@@ -11,9 +12,10 @@ import { MEDIA_TIMESTAMP_SAVE_MINIMUM_DURATION } from '../../config';
 import {
   selectIsMessageProtected, selectMessageTimestampableDuration, selectTabState,
 } from '../../global/selectors';
+import { ARE_WEBCODECS_SUPPORTED } from '../../util/browser/globalEnvironment';
+import { IS_TOUCH_ENV } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import stopEvent from '../../util/stopEvent';
-import { ARE_WEBCODECS_SUPPORTED, IS_TOUCH_ENV } from '../../util/windowEnvironment';
 import { calculateMediaViewerDimensions } from '../common/helpers/mediaDimensions';
 import { renderMessageText } from '../common/helpers/renderMessageText';
 import getViewableMedia from './helpers/getViewableMedia';
@@ -170,11 +172,13 @@ const MediaViewerContent = ({
     }
   }
 
-  const textParts = textMessage && (textMessage.content.action?.type === 'suggestProfilePhoto'
-    ? lang('Conversation.SuggestedPhotoTitle')
-    : renderMessageText({
-      message: textMessage, maxTimestamp, threadId, forcePlayback: true, isForMediaViewer: true,
-    }));
+  const textParts = textMessage && (
+    textMessage.content.action
+      ? (textMessage.content.action.type === 'suggestProfilePhoto'
+        ? lang('Conversation.SuggestedPhotoTitle') : undefined)
+      : renderMessageText({
+        message: textMessage, maxTimestamp, threadId, forcePlayback: true, isForMediaViewer: true,
+      }));
   const buttonText = textMessage && 'buttonText' in textMessage ? textMessage.buttonText : undefined;
   const hasFooter = Boolean(textParts);
   const posterSize = calculateMediaViewerDimensions(dimensions!, hasFooter, isVideo);
@@ -304,7 +308,6 @@ function renderVideoPreview(blobUrl?: string, imageSize?: ApiDimensions, canDrag
         <div
           style={wrapperStyle}
         >
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video
             style={videoStyle}
             className={buildClassName(isProtected && 'is-protected')}

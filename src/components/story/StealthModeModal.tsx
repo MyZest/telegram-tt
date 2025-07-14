@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from '../../lib/teact/teact';
+import { memo, useEffect, useState } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { ApiStealthMode } from '../../api/types';
@@ -24,7 +24,7 @@ type StateProps = {
   isCurrentUserPremium?: boolean;
 };
 
-const StealthModeModal = ({ isOpen, stealthMode, isCurrentUserPremium } : StateProps) => {
+const StealthModeModal = ({ isOpen, stealthMode, isCurrentUserPremium }: StateProps) => {
   const {
     toggleStealthModal,
     activateStealthMode,
@@ -84,7 +84,7 @@ const StealthModeModal = ({ isOpen, stealthMode, isCurrentUserPremium } : StateP
         <Icon name="close" />
       </Button>
       <div className={styles.stealthIcon}>
-        <Icon name="eye-closed-outline" />
+        <Icon name="eye-crossed-outline" />
       </div>
       <div className={styles.title}>{lang('StealthMode')}</div>
       <div className={styles.description}>

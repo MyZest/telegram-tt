@@ -13,6 +13,7 @@ import {
   SERVICE_NOTIFICATIONS_USER_ID,
 } from '../../../config';
 import { cancelScrollBlockingAnimation, isAnimatingScroll } from '../../../util/animateScroll';
+import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import { copyHtmlToClipboard } from '../../../util/clipboard';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { compact, findLast } from '../../../util/iteratees';
@@ -20,7 +21,6 @@ import * as langProvider from '../../../util/oldLangProvider';
 import { oldTranslate } from '../../../util/oldLangProvider';
 import parseHtmlAsFormattedText from '../../../util/parseHtmlAsFormattedText';
 import { getServerTime } from '../../../util/serverTime';
-import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 import versionNotification from '../../../versionNotification.txt';
 import {
   getIsSavedDialog,
@@ -29,10 +29,11 @@ import {
   getMediaHash,
   getMessageDownloadableMedia,
   getMessageStatefulContent,
-  getPeerTitle,
   isChatChannel,
 } from '../../helpers';
 import { getMessageSummaryText } from '../../helpers/messageSummary';
+import { addTabStateResetterAction } from '../../helpers/meta';
+import { getPeerTitle } from '../../helpers/peers';
 import { renderMessageSummaryHtml } from '../../helpers/renderMessageSummaryHtml';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
@@ -71,6 +72,7 @@ import {
   selectThreadInfo,
   selectViewportIds,
 } from '../../selectors';
+import { getPeerStarsForMessage } from '../api/messages';
 
 import { getIsMobile } from '../../../hooks/useAppLayout';
 
@@ -404,8 +406,8 @@ addActionHandler('focusNextReply', (global, actions, payload): ActionReturnType 
 addActionHandler('focusMessage', (global, actions, payload): ActionReturnType => {
   const {
     chatId, threadId = MAIN_THREAD_ID, messageListType = 'thread', noHighlight, groupedId, groupedChatId,
-    replyMessageId, isResizingContainer, shouldReplaceHistory, noForumTopicPanel, quote, scrollTargetPosition,
-    timestamp, tabId = getCurrentTabId(),
+    replyMessageId, isResizingContainer, shouldReplaceHistory, noForumTopicPanel, quote, quoteOffset,
+    scrollTargetPosition, timestamp, tabId = getCurrentTabId(),
   } = payload;
 
   let { messageId } = payload;
@@ -454,6 +456,7 @@ addActionHandler('focusMessage', (global, actions, payload): ActionReturnType =>
     noHighlight,
     isResizingContainer,
     quote,
+    quoteOffset,
     scrollTargetPosition,
   }, tabId);
   global = updateFocusDirection(global, undefined, tabId);
@@ -524,13 +527,14 @@ addActionHandler('setShouldPreventComposerAnimation', (global, actions, payload)
 
 addActionHandler('openReplyMenu', (global, actions, payload): ActionReturnType => {
   const {
-    fromChatId, messageId, quoteText, tabId = getCurrentTabId(),
+    fromChatId, messageId, quoteText, quoteOffset, tabId = getCurrentTabId(),
   } = payload;
   return updateTabState(global, {
     replyingMessage: {
       fromChatId,
       messageId,
       quoteText,
+      quoteOffset,
     },
     isShareMessageModalShown: true,
   }, tabId);
@@ -715,7 +719,7 @@ addActionHandler('toggleMessageSelection', (global, actions, payload): ActionRet
   if (global.shouldShowContextMenuHint) {
     actions.disableContextMenuHint();
     actions.showNotification({
-      // eslint-disable-next-line max-len
+      // eslint-disable-next-line @stylistic/max-len
       message: `To **edit** or **reply**, close this menu. Then ${IS_TOUCH_ENV ? 'long tap' : 'right click'} on a message.`,
       tabId,
     });
@@ -758,6 +762,22 @@ addActionHandler('closePollModal', (global, actions, payload): ActionReturnType 
     },
   }, tabId);
 });
+
+addActionHandler('openTodoListModal', (global, actions, payload): ActionReturnType => {
+  const {
+    chatId, messageId, forNewTask, tabId = getCurrentTabId(),
+  } = payload;
+
+  return updateTabState(global, {
+    todoListModal: {
+      chatId,
+      messageId,
+      forNewTask,
+    },
+  }, tabId);
+});
+
+addTabStateResetterAction('closeTodoListModal', 'todoListModal');
 
 addActionHandler('checkVersionNotification', (global, actions): ActionReturnType => {
   if (RELEASE_DATETIME && Date.now() > Number(RELEASE_DATETIME) + VERSION_NOTIFICATION_DURATION) {
@@ -1061,11 +1081,16 @@ addActionHandler('closeDeleteMessageModal', (global, actions, payload): ActionRe
 });
 
 addActionHandler('openAboutAdsModal', (global, actions, payload): ActionReturnType => {
-  const { chatId, tabId = getCurrentTabId() } = payload || {};
+  const {
+    randomId, additionalInfo, canReport, sponsorInfo, tabId = getCurrentTabId(),
+  } = payload || {};
 
   return updateTabState(global, {
     aboutAdsModal: {
-      chatId,
+      randomId,
+      canReport,
+      additionalInfo,
+      sponsorInfo,
     },
   }, tabId);
 });
@@ -1092,4 +1117,39 @@ addActionHandler('closeSharePreparedMessageModal', (global, actions, payload): A
   return updateTabState(global, {
     sharePreparedMessageModal: undefined,
   }, tabId);
+});
+
+addActionHandler('updateSharePreparedMessageModalSendArgs', async (global, actions, payload): Promise<void> => {
+  const { args, tabId = getCurrentTabId() } = payload || {};
+  const tabState = selectTabState(global, tabId);
+
+  if (!tabState.sharePreparedMessageModal) {
+    return;
+  }
+
+  if (!args) {
+    global = updateTabState(global, {
+      sharePreparedMessageModal: {
+        ...tabState.sharePreparedMessageModal,
+        pendingSendArgs: undefined,
+      },
+    }, tabId);
+    setGlobal(global);
+    return;
+  }
+
+  const starsForSendMessage = await getPeerStarsForMessage(global, args.peerId);
+
+  global = getGlobal();
+  global = updateTabState(global, {
+    sharePreparedMessageModal: {
+      ...tabState.sharePreparedMessageModal,
+      pendingSendArgs: {
+        peerId: args.peerId,
+        threadId: args.threadId,
+        starsForSendMessage,
+      },
+    },
+  }, tabId);
+  setGlobal(global);
 });

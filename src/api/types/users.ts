@@ -1,10 +1,10 @@
 import type { API_CHAT_TYPES } from '../../config';
 import type { ApiBotInfo } from './bots';
 import type { ApiBusinessIntro, ApiBusinessLocation, ApiBusinessWorkHours } from './business';
-import type { ApiPeerColor } from './chats';
+import type { ApiPeerColor, ApiPeerSettings } from './chats';
 import type { ApiDocument, ApiPhoto } from './messages';
 import type { ApiBotVerification } from './misc';
-import type { ApiSavedStarGift } from './payments';
+import type { ApiSavedStarGift } from './stars';
 
 export interface ApiUser {
   id: string;
@@ -20,6 +20,7 @@ export interface ApiUser {
   lastName?: string;
   noStatus?: boolean;
   usernames?: ApiUsername[];
+  hasUsername?: boolean;
   phoneNumber: string;
   accessHash?: string;
   hasVideoAvatar?: boolean;
@@ -38,6 +39,7 @@ export interface ApiUser {
   hasMainMiniApp?: boolean;
   botActiveUsers?: number;
   botVerificationIconId?: string;
+  paidMessagesStars?: number;
 }
 
 export interface ApiUserFullInfo {
@@ -50,11 +52,12 @@ export interface ApiUserFullInfo {
   fallbackPhoto?: ApiPhoto;
   personalPhoto?: ApiPhoto;
   noVoiceMessages?: boolean;
-  premiumGifts?: ApiPremiumGiftOption[];
   isTranslationDisabled?: true;
   areAdsEnabled?: boolean;
   hasPinnedStories?: boolean;
   isContactRequirePremium?: boolean;
+  shouldDisplayGiftsButton?: boolean;
+  disallowedGifts?: ApiDisallowedGifts;
   birthday?: ApiBirthday;
   personalChannelId?: string;
   personalChannelMessageId?: number;
@@ -66,6 +69,8 @@ export interface ApiUserFullInfo {
   isBotAccessEmojiGranted?: boolean;
   hasScheduledMessages?: boolean;
   botVerification?: ApiBotVerification;
+  paidMessagesStars?: number;
+  settings?: ApiPeerSettings;
 }
 
 export type ApiFakeType = 'fake' | 'scam';
@@ -127,13 +132,6 @@ export interface ApiAttachBotIcon {
   document: ApiDocument;
 }
 
-export interface ApiPremiumGiftOption {
-  months: number;
-  currency: string;
-  amount: number;
-  botUrl: string;
-}
-
 export type ApiEmojiStatusType = ApiEmojiStatus | ApiEmojiStatusCollectible;
 
 export interface ApiEmojiStatus {
@@ -160,4 +158,11 @@ export interface ApiBirthday {
   day: number;
   month: number;
   year?: number;
+}
+
+export interface ApiDisallowedGifts {
+  shouldDisallowUnlimitedStarGifts?: boolean;
+  shouldDisallowLimitedStarGifts?: boolean;
+  shouldDisallowUniqueStarGifts?: boolean;
+  shouldDisallowPremiumGifts?: boolean;
 }

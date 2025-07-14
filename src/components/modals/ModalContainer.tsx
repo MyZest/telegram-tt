@@ -1,4 +1,5 @@
-import React, { memo } from '../../lib/teact/teact';
+import type React from '../../lib/teact/teact';
+import { memo } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
 import type { TabState } from '../../global/types';
@@ -14,10 +15,13 @@ import BoostModal from './boost/BoostModal.async';
 import ChatInviteModal from './chatInvite/ChatInviteModal.async';
 import ChatlistModal from './chatlist/ChatlistModal.async';
 import CollectibleInfoModal from './collectible/CollectibleInfoModal.async';
+import DeleteAccountModal from './deleteAccount/DeleteAccountModal.async';
 import EmojiStatusAccessModal from './emojiStatusAccess/EmojiStatusAccessModal.async';
+import FrozenAccountModal from './frozenAccount/FrozenAccountModal.async';
 import PremiumGiftModal from './gift/GiftModal.async';
 import GiftInfoModal from './gift/info/GiftInfoModal.async';
 import GiftRecipientPicker from './gift/recipient/GiftRecipientPicker.async';
+import GiftResalePriceComposerModal from './gift/resale/GiftResalePriceComposerModal.async';
 import GiftStatusInfoModal from './gift/status/GiftStatusInfoModal.async';
 import GiftTransferModal from './gift/transfer/GiftTransferModal.async';
 import GiftUpgradeModal from './gift/upgrade/GiftUpgradeModal.async';
@@ -32,6 +36,7 @@ import PreparedMessageModal from './preparedMessage/PreparedMessageModal.async';
 import ReportAdModal from './reportAd/ReportAdModal.async';
 import ReportModal from './reportModal/ReportModal.async';
 import SharePreparedMessageModal from './sharePreparedMessage/SharePreparedMessageModal.async';
+import ChatRefundModal from './stars/chatRefund/ChatRefundModal.async';
 import StarsGiftModal from './stars/gift/StarsGiftModal.async';
 import StarsBalanceModal from './stars/StarsBalanceModal.async';
 import StarsPaymentModal from './stars/StarsPaymentModal.async';
@@ -43,41 +48,44 @@ import WebAppModal from './webApp/WebAppModal.async';
 
 // `Pick` used only to provide tab completion
 type ModalKey = keyof Pick<TabState,
-'giftCodeModal' |
-'boostModal' |
-'chatlistModal' |
-'urlAuth' |
-'mapModal' |
-'oneTimeMediaModal' |
-'inviteViaLinkModal' |
-'requestedAttachBotInstall' |
-'collectibleInfoModal' |
-'reportAdModal' |
-'reportModal' |
-'starsBalanceModal' |
-'starsPayment' |
-'starsTransactionModal' |
-'paidReactionModal' |
-'webApps' |
-'starsTransactionModal' |
-'chatInviteModal' |
-'starsSubscriptionModal' |
-'starsGiftModal' |
-'giftModal' |
-'isGiftRecipientPickerOpen' |
-'isWebAppsCloseConfirmationModalOpen' |
-'giftInfoModal' |
-'suggestedStatusModal' |
-'emojiStatusAccessModal' |
-'locationAccessModal' |
-'aboutAdsModal' |
-'giftUpgradeModal' |
-'monetizationVerificationModal' |
-'giftWithdrawModal' |
-'preparedMessageModal' |
-'sharePreparedMessageModal' |
-'giftStatusInfoModal' |
-'giftTransferModal'
+  'giftCodeModal' |
+  'boostModal' |
+  'chatlistModal' |
+  'urlAuth' |
+  'mapModal' |
+  'oneTimeMediaModal' |
+  'inviteViaLinkModal' |
+  'requestedAttachBotInstall' |
+  'collectibleInfoModal' |
+  'reportAdModal' |
+  'reportModal' |
+  'starsBalanceModal' |
+  'starsPayment' |
+  'starsTransactionModal' |
+  'paidReactionModal' |
+  'webApps' |
+  'chatInviteModal' |
+  'starsSubscriptionModal' |
+  'starsGiftModal' |
+  'giftModal' |
+  'isGiftRecipientPickerOpen' |
+  'isWebAppsCloseConfirmationModalOpen' |
+  'giftInfoModal' |
+  'giftResalePriceComposerModal' |
+  'suggestedStatusModal' |
+  'emojiStatusAccessModal' |
+  'locationAccessModal' |
+  'aboutAdsModal' |
+  'giftUpgradeModal' |
+  'monetizationVerificationModal' |
+  'giftWithdrawModal' |
+  'preparedMessageModal' |
+  'sharePreparedMessageModal' |
+  'giftStatusInfoModal' |
+  'giftTransferModal' |
+  'chatRefundModal' |
+  'isFrozenAccountModalOpen' |
+  'deleteAccountModal'
 >;
 
 type StateProps = {
@@ -116,6 +124,7 @@ const MODALS: ModalRegistry = {
   isGiftRecipientPickerOpen: GiftRecipientPicker,
   isWebAppsCloseConfirmationModalOpen: WebAppsCloseConfirmationModal,
   giftInfoModal: GiftInfoModal,
+  giftResalePriceComposerModal: GiftResalePriceComposerModal,
   suggestedStatusModal: SuggestedStatusModal,
   emojiStatusAccessModal: EmojiStatusAccessModal,
   locationAccessModal: LocationAccessModal,
@@ -127,6 +136,9 @@ const MODALS: ModalRegistry = {
   preparedMessageModal: PreparedMessageModal,
   sharePreparedMessageModal: SharePreparedMessageModal,
   giftTransferModal: GiftTransferModal,
+  chatRefundModal: ChatRefundModal,
+  isFrozenAccountModalOpen: FrozenAccountModal,
+  deleteAccountModal: DeleteAccountModal,
 };
 const MODAL_KEYS = Object.keys(MODALS) as ModalKey[];
 const MODAL_ENTRIES = Object.entries(MODALS) as Entries<ModalRegistry>;

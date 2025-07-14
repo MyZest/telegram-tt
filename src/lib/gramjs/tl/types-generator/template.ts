@@ -1,4 +1,4 @@
-/* eslint-disable max-len */
+/* eslint-disable @stylistic/max-len */
 /* eslint-disable @typescript-eslint/indent */
 /* eslint-disable indent */
 
@@ -41,11 +41,15 @@ const generate = ({
     }
 
     function renderConstructors(arr: GenerationEntryConfig[], indent: string) {
-        return arr.map(({ name, argsConfig }) => {
+        return arr.map(({ name, subclassOfId, constructorId, argsConfig }) => {
             const argKeys = Object.keys(argsConfig);
+            const defaultHead = `${indent}  CONSTRUCTOR_ID: ${constructorId};
+${indent}  SUBCLASS_OF_ID: ${subclassOfId};
+${indent}  className: '${name}';\n`;
 
             if (!argKeys.length) {
                 return `export class ${upperFirst(name)} extends VirtualClass<void> {
+${defaultHead}
 ${indent}  static fromReader(reader: Reader): ${upperFirst(name)};
 ${indent}}`;
             }
@@ -65,6 +69,7 @@ ${indent}  ${Object.keys(argsConfig)
         ${renderArg(argName, argsConfig[argName])};
       `.trim())
             .join(`\n${indent}  `)}
+${defaultHead}
 ${indent}  static fromReader(reader: Reader): ${upperFirst(name)};
 ${indent}}`.trim();
         })
@@ -83,12 +88,12 @@ ${indent}}`.trim();
             const hasRequiredArgs = argKeys.some((argName) => !isFlagArg(argName) && !argsConfig[argName].isFlag);
 
             return `
-      export class ${upperFirst(name)} extends Request<Partial<{
+      export class ${upperFirst(name)} extends Request<{
 ${indent}  ${argKeys.map((argName) => `
         ${renderArg(argName, argsConfig[argName])};
       `.trim())
             .join(`\n${indent}  `)}
-${indent}}${!hasRequiredArgs ? ' | void' : ''}>, ${renderedResult}> {
+${indent}}${!hasRequiredArgs ? ' | void' : ''}, ${renderedResult}> {
 ${indent}  ${argKeys.map((argName) => `
         ${renderArg(argName, argsConfig[argName])};
       `.trim())
@@ -195,7 +200,7 @@ namespace Api {
     constructor(args: Args);
   }
 
-  class Request<Args, Response> extends VirtualClass<Partial<Args>> {
+  class Request<Args, Response> extends VirtualClass<Args> {
     static readResult(reader: Reader): Buffer;
 
     __response: Response;

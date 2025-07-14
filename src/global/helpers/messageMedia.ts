@@ -24,7 +24,7 @@ import {
   IS_PROGRESSIVE_SUPPORTED,
   IS_SAFARI,
   MAX_BUFFER_SIZE,
-} from '../../util/windowEnvironment';
+} from '../../util/browser/windowEnvironment';
 import { getDocumentHasPreview } from '../../components/common/helpers/documentInfo';
 import { getAttachmentMediaType, matchLinkInMessageText } from './messages';
 
@@ -51,6 +51,7 @@ export function hasMessageMedia(message: MediaContainer) {
     || getMessageSticker(message)
     || getMessageContact(message)
     || getMessagePollId(message)
+    || getMessageTodo(message)
     || getMessageAction(message)
     || getMessageAudio(message)
     || getMessageVoice(message)
@@ -59,7 +60,7 @@ export function hasMessageMedia(message: MediaContainer) {
 
 export function canEditMedia(message: MediaContainer) {
   const {
-    photo, video, altVideos, audio, document, text, webPage, ...otherMedia
+    video, ...otherMedia
   } = message.content;
 
   return !video?.isRound && !Object.keys(otherMedia).length;
@@ -126,6 +127,10 @@ export function getMessageContact(message: MediaContainer) {
 
 export function getMessagePollId(message: MediaContainer) {
   return message.content.pollId;
+}
+
+export function getMessageTodo(message: MediaContainer) {
+  return message.content.todo;
 }
 
 export function getMessageInvoice(message: MediaContainer) {
@@ -223,7 +228,7 @@ export function buildStaticMapHash(
     long, lat, accessHash, accuracyRadius,
   } = geo;
 
-  // eslint-disable-next-line max-len
+  // eslint-disable-next-line @stylistic/max-len
   return `staticMap:${accessHash}?lat=${lat}&long=${long}&w=${width}&h=${height}&zoom=${zoom}&scale=${scale}&accuracyRadius=${accuracyRadius}`;
 }
 
@@ -439,7 +444,10 @@ export function getGamePreviewVideoHash(game: ApiGame) {
 
 export function appendProgressiveQueryParameters(media: ApiAudio | ApiVideo | ApiDocument, base: string) {
   if (IS_PROGRESSIVE_SUPPORTED && IS_SAFARI) {
-    return `${base}?fileSize=${media.size}&mimeType=${media.mimeType}`;
+    const url = new URL(base, window.location.href);
+    url.searchParams.append('fileSize', media.size.toString());
+    url.searchParams.append('mimeType', media.mimeType);
+    return url.toString();
   }
 
   return base;
@@ -546,7 +554,7 @@ export function getMediaTransferState(
 export function getMessageContentIds(
   messages: Record<number, ApiMessage>, messageIds: number[], contentType: ApiMessageSearchType | 'inlineMedia',
 ) {
-  let validator: Function;
+  let validator: (message: ApiMessage) => unknown;
 
   switch (contentType) {
     case 'media':

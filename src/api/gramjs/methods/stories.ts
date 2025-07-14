@@ -25,6 +25,7 @@ import {
   buildInputPeer,
   buildInputPrivacyRules,
   buildInputReaction,
+  DEFAULT_PRIMITIVES,
 } from '../gramjsBuilders';
 import { addStoryToLocalDb } from '../helpers/localDb';
 import { deserializeBytes } from '../helpers/misc';
@@ -67,11 +68,11 @@ export async function fetchAllStories({
     const peerId = getApiChatIdFromMtpPeer(peerStories.peer);
     const stories = buildApiPeerStories(peerStories);
     const { profileIds, orderedIds, lastUpdatedAt } = Object.values(stories).reduce<
-    {
-      profileIds: number[];
-      orderedIds: number[];
-      lastUpdatedAt?: number;
-    }
+      {
+        profileIds: number[];
+        orderedIds: number[];
+        lastUpdatedAt?: number;
+      }
     >((dataAcc, story) => {
       if ('isInProfile' in story && story.isInProfile) {
         dataAcc.profileIds.push(story.id);
@@ -143,7 +144,8 @@ export async function fetchPeerStories({
 }
 
 export function fetchPeerProfileStories({
-  peer, offsetId,
+  peer,
+  offsetId = DEFAULT_PRIMITIVES.INT,
 }: {
   peer: ApiPeer;
   offsetId?: number;
@@ -160,7 +162,7 @@ export function fetchPeerProfileStories({
 
 export function fetchStoriesArchive({
   peer,
-  offsetId,
+  offsetId = DEFAULT_PRIMITIVES.INT,
 }: {
   peer: ApiPeer;
   offsetId?: number;
@@ -238,7 +240,7 @@ export function toggleStoryInProfile({
   return invokeRequest(new GramJs.stories.TogglePinned({
     peer: buildInputPeer(peer.id, peer.accessHash),
     id: [storyId],
-    pinned: isInProfile,
+    pinned: Boolean(isInProfile),
   }));
 }
 
@@ -260,7 +262,7 @@ export async function fetchStoryViewList({
   query,
   areReactionsFirst,
   limit = STORY_LIST_LIMIT,
-  offset = '',
+  offset = DEFAULT_PRIMITIVES.STRING,
 }: {
   peer: ApiPeer;
   storyId: number;
@@ -317,7 +319,7 @@ export async function fetchStoriesViews({
   };
 }
 
-export async function fetchStoryLink({ peer, storyId }: { peer: ApiPeer ; storyId: number }) {
+export async function fetchStoryLink({ peer, storyId }: { peer: ApiPeer; storyId: number }) {
   const result = await invokeRequest(new GramJs.stories.ExportStoryLink({
     peer: buildInputPeer(peer.id, peer.accessHash),
     id: storyId,

@@ -1,14 +1,8 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, {
-  memo, useEffect,
-  useMemo,
-  useRef, useState,
-} from '../../../lib/teact/teact';
+import { memo, useEffect, useMemo, useRef, useState } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type {
-  ApiAttachBot, ApiBotAppSettings, ApiUser,
-} from '../../../api/types';
+import type { ApiAttachBot, ApiBotAppSettings, ApiUser } from '../../../api/types';
 import type { TabState } from '../../../global/types';
 import type { BotAppPermissions, ThemeKey } from '../../../types';
 import type {
@@ -30,10 +24,11 @@ import {
   selectUserFullInfo,
   selectWebApp,
 } from '../../../global/selectors';
+import { getGeolocationStatus, IS_GEOLOCATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import buildStyle from '../../../util/buildStyle.ts';
 import download from '../../../util/download';
 import { extractCurrentThemeParams, validateHexColor } from '../../../util/themeStyle';
-import { getGeolocationStatus, IS_GEOLOCATION_SUPPORTED } from '../../../util/windowEnvironment';
 import { callApi } from '../../../api/gramjs';
 import renderText from '../../common/helpers/renderText';
 
@@ -75,7 +70,7 @@ export type OwnProps = {
   registerReloadFrameCallback: (callback: (url: string) => void) => void;
   onContextMenuButtonClick: (e: React.MouseEvent) => void;
   isTransforming?: boolean;
-  isMultiTabSupported? : boolean;
+  isMultiTabSupported?: boolean;
   modalHeight: number;
 };
 
@@ -164,24 +159,22 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     unlockPopupsAt, handlePopupOpened, handlePopupClosed,
   } = usePopupLimit(POPUP_SEQUENTIAL_LIMIT, POPUP_RESET_DELAY);
 
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>();
 
-  // eslint-disable-next-line no-null/no-null
-  const headerButtonRef = useRef<HTMLDivElement>(null);
+  const headerButtonRef = useRef<HTMLDivElement>();
 
-  // eslint-disable-next-line no-null/no-null
-  const headerButtonCaptionRef = useRef<HTMLDivElement>(null);
+  const headerButtonCaptionRef = useRef<HTMLDivElement>();
 
   const isFullscreen = modalState === 'fullScreen';
   const isMinimizedState = modalState === 'minimized';
 
   const exitFullScreenCallback = useLastCallback(() => {
-    setTimeout(() => { changeWebAppModalState({ state: 'maximized' }); }, COLLAPSING_WAIT);
+    setTimeout(() => {
+      changeWebAppModalState({ state: 'maximized' });
+    }, COLLAPSING_WAIT);
   });
 
-  // eslint-disable-next-line no-null/no-null
-  const fullscreenElementRef = useRef<HTMLElement | null>(null);
+  const fullscreenElementRef = useRef<HTMLElement>();
 
   useEffect(() => {
     fullscreenElementRef.current = document.querySelector('#portals') as HTMLElement;
@@ -190,7 +183,7 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
   const [, setFullscreen, exitFullscreen] = useFullscreen(fullscreenElementRef, exitFullScreenCallback);
 
   const activeWebApp = modal?.activeWebAppKey ? modal.openedWebApps[modal.activeWebAppKey] : undefined;
-  const activeWebAppName = activeWebApp?.appName;
+  const { appName: activeWebAppName, backgroundColor } = activeWebApp || {};
   const {
     url, buttonText, isBackButtonVisible,
   } = webApp || {};
@@ -247,8 +240,7 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     updateCurrentWebApp({ headerColor: color });
   }, [themeHeaderColor, headerColorFromEvent, headerColorFromSettings]);
 
-  // eslint-disable-next-line no-null/no-null
-  const frameRef = useRef<HTMLIFrameElement>(null);
+  const frameRef = useRef<HTMLIFrameElement>();
 
   const oldLang = useOldLang();
   const lang = useLang();
@@ -335,7 +327,9 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
   });
 
   const sendFullScreenChangedCallback = useLastCallback(
-    (value: boolean) => { if (isActive) sendFullScreenChanged(value); },
+    (value: boolean) => {
+      if (isActive) sendFullScreenChanged(value);
+    },
   );
 
   useEffect(() => {
@@ -747,14 +741,14 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
             sendEvent({
               eventType: 'location_requested',
               eventData: {
-                available: botAppPermissions?.geolocation!,
+                available: Boolean(botAppPermissions?.geolocation),
                 latitude: geolocation?.latitude,
                 longitude: geolocation?.longitude,
                 altitude: geolocation?.altitude,
                 course: geolocation?.heading,
                 speed: geolocation?.speed,
                 horizontal_accuracy: geolocation?.accuracy,
-                vertical_accuracy: geolocation?.accuracy,
+                vertical_accuracy: geolocation?.altitudeAccuracy,
               },
             });
           } else {
@@ -899,7 +893,10 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     }
   }, [setShouldDecreaseWebFrameSize, shouldShowSecondaryButton, shouldShowMainButton]);
 
-  const frameStyle = isTransforming ? 'pointer-events: none;' : '';
+  const frameStyle = buildStyle(
+    `background-color: ${backgroundColor || 'var(--color-background)'}`,
+    isTransforming && 'pointer-events: none;',
+  );
 
   const handleBackClick = useLastCallback(() => {
     if (isBackButtonVisible) {
@@ -1060,7 +1057,7 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
         src={url}
         title={`${bot?.firstName} Web App`}
         sandbox={SANDBOX_ATTRIBUTES}
-        allow="camera; microphone; geolocation;"
+        allow="camera; microphone; geolocation; clipboard-write;"
         allowFullScreen
         ref={frameRef}
       />
@@ -1112,7 +1109,7 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
             {mainButton?.isProgressVisible && <Spinner className={styles.mainButtonSpinner} color="white" />}
           </Button>
         </div>
-      ) }
+      )}
       {popupParameters && (
         <Modal
           isOpen={Boolean(popupParameters)}
@@ -1132,7 +1129,7 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
                 color={button.type === 'destructive' ? 'danger' : 'primary'}
                 isText
                 size="smaller"
-                // eslint-disable-next-line react/jsx-no-bind
+
                 onClick={() => handleAppPopupClose(button.id)}
               >
                 {button.text || oldLang(DEFAULT_BUTTON_TEXT[button.type])}

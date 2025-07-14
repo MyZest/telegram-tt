@@ -1,5 +1,5 @@
 import type { FC } from '../../lib/teact/teact';
-import React, { memo, useEffect } from '../../lib/teact/teact';
+import { memo, useEffect } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type {
@@ -9,7 +9,6 @@ import type { MessageList } from '../../types';
 
 import { selectCurrentMessageList, selectTabState } from '../../global/selectors';
 import getReadableErrorText from '../../util/getReadableErrorText';
-import { pick } from '../../util/iteratees';
 import renderText from '../common/helpers/renderText';
 
 import useFlag from '../../hooks/useFlag';
@@ -49,7 +48,7 @@ const Dialogs: FC<StateProps> = ({ dialogs, currentMessageList }) => {
       }
 
       sendMessage({
-        contact: pick(contactRequest, ['firstName', 'lastName', 'phoneNumber']),
+        contact: contactRequest,
         messageList: currentMessageList,
       });
       closeModal();
@@ -68,7 +67,7 @@ const Dialogs: FC<StateProps> = ({ dialogs, currentMessageList }) => {
           <Button
             className="confirm-dialog-button"
             isText
-            // eslint-disable-next-line react/jsx-no-bind
+
             onClick={handleConfirm}
           >
             {lang('OK')}
@@ -89,7 +88,7 @@ const Dialogs: FC<StateProps> = ({ dialogs, currentMessageList }) => {
         title={getErrorHeader(error)}
       >
         {error.hasErrorKey ? getReadableErrorText(error)
-          : renderText(error.message!, ['simple_markdown', 'emoji', 'br'])}
+          : renderText(error.message, ['simple_markdown', 'emoji', 'br'])}
         <div className="dialog-buttons mt-2">
           <Button isText onClick={closeModal}>{lang('OK')}</Button>
         </div>

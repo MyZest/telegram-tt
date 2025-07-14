@@ -1,5 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, { memo, useEffect, useState } from '../../../lib/teact/teact';
+import { memo, useEffect, useState } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiPeer } from '../../../api/types';
@@ -59,7 +59,7 @@ const ChatReportPane: FC<OwnProps & StateProps> = ({
     deleteChatUser,
     deleteHistory,
     toggleChatArchived,
-    hideChatReportPane,
+    hidePeerSettingsBar,
   } = getActions();
 
   const lang = useOldLang();
@@ -96,7 +96,7 @@ const ChatReportPane: FC<OwnProps & StateProps> = ({
   });
 
   const handleCloseReportPane = useLastCallback(() => {
-    hideChatReportPane({ chatId });
+    hidePeerSettingsBar({ peerId: chatId });
   });
 
   const handleChatReportSpam = useLastCallback(() => {

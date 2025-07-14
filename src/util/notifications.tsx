@@ -1,4 +1,3 @@
-import React from '../lib/teact/teact';
 import { getActions, getGlobal, setGlobal } from '../global';
 
 import type {
@@ -12,29 +11,29 @@ import {
   getChatAvatarHash,
   getChatTitle,
   getMessageRecentReaction,
-  getMessageSenderName,
   getPrivateChatUserId,
   getUserFullName,
-  isChatChannel,
-  selectIsChatMuted,
-  selectShouldShowMessagePreview,
 } from '../global/helpers';
-import { addNotifyExceptions, replaceSettings } from '../global/reducers';
+import { getIsChatMuted, getIsChatSilent, getShouldShowMessagePreview } from '../global/helpers/notifications';
+import { getMessageSenderName } from '../global/helpers/peers';
 import {
-  selectChat,
   selectCurrentMessageList,
   selectIsChatWithSelf,
-  selectNotifyExceptions,
-  selectNotifySettings,
-  selectUser,
+  selectNotifyDefaults,
+  selectNotifyException,
+  selectPeer,
+  selectSender,
+  selectSettingsKeys,
+  selectTopicFromMessage,
 } from '../global/selectors';
 import { callApi } from '../api/gramjs';
+import { IS_ELECTRON, IS_SERVICE_WORKER_SUPPORTED, IS_TOUCH_ENV } from './browser/windowEnvironment';
 import jsxToHtml from './element/jsxToHtml';
 import { buildCollectionByKey } from './iteratees';
 import * as mediaLoader from './mediaLoader';
 import { oldTranslate } from './oldLangProvider';
 import { debounce } from './schedulers';
-import { IS_ELECTRON, IS_SERVICE_WORKER_SUPPORTED, IS_TOUCH_ENV } from './windowEnvironment';
+import { getServerTime } from './serverTime';
 
 import MessageSummary from '../components/common/MessageSummary';
 
@@ -107,7 +106,7 @@ notificationSound.setAttribute('mozaudiochannel', 'notification');
 
 export async function playNotifySound(id?: string, volume?: number) {
   if (id !== undefined && soundPlayedIds.has(id)) return;
-  const { notificationSoundVolume } = selectNotifySettings(getGlobal());
+  const { notificationSoundVolume } = selectSettingsKeys(getGlobal());
   const currentVolume = volume ? volume / 10 : notificationSoundVolume / 10;
   if (currentVolume === 0) return;
   notificationSound.volume = currentVolume;
@@ -152,7 +151,6 @@ export async function requestPermission() {
 }
 
 async function unsubscribeFromPush(subscription: PushSubscription | null) {
-  const global = getGlobal();
   const { deleteDeviceToken } = getActions();
   if (subscription) {
     try {
@@ -168,6 +166,7 @@ async function unsubscribeFromPush(subscription: PushSubscription | null) {
       }
     }
   }
+  const global = getGlobal();
   if (global.push) {
     await callApi('unregisterDevice', global.push.deviceToken);
     deleteDeviceToken();
@@ -179,27 +178,6 @@ export async function unsubscribe() {
   const serviceWorkerRegistration = await navigator.serviceWorker.ready;
   const subscription = await serviceWorkerRegistration.pushManager.getSubscription();
   await unsubscribeFromPush(subscription);
-}
-
-// Indicates if notification settings are loaded from the api
-let areSettingsLoaded = false;
-
-// Load notification settings from the api
-async function loadNotificationSettings() {
-  if (areSettingsLoaded) return selectNotifySettings(getGlobal());
-  const [resultSettings, resultExceptions] = await Promise.all([
-    callApi('fetchNotificationSettings'),
-    callApi('fetchNotificationExceptions'),
-  ]);
-  if (!resultSettings) return selectNotifySettings(getGlobal());
-
-  let global = replaceSettings(getGlobal(), resultSettings);
-  if (resultExceptions) {
-    global = addNotifyExceptions(global, resultExceptions);
-  }
-  setGlobal(global);
-  areSettingsLoaded = true;
-  return selectNotifySettings(global);
 }
 
 // Load custom emoji from the api if it's not cached already
@@ -257,7 +235,7 @@ export async function subscribe() {
       console.log('[PUSH] Received push subscription: ', deviceToken);
     }
     await callApi('registerDevice', deviceToken);
-    setDeviceToken(deviceToken);
+    setDeviceToken({ token: deviceToken });
     hasPushNotifications = true;
     hasWebNotifications = true;
   } catch (error: any) {
@@ -293,12 +271,16 @@ export async function subscribe() {
 }
 
 function checkIfShouldNotify(chat: ApiChat, message: Partial<ApiMessage>) {
-  if (!areSettingsLoaded) return false;
   const global = getGlobal();
-  const isMuted = selectIsChatMuted(chat, selectNotifySettings(global), selectNotifyExceptions(global));
+  const isChatMuted = getIsChatMuted(chat, selectNotifyDefaults(global), selectNotifyException(global, chat.id));
+  const topic = selectTopicFromMessage(global, message as ApiMessage);
+  const topicMutedUntil = topic?.notifySettings.mutedUntil;
+  const isMuted = topicMutedUntil === undefined ? isChatMuted : topicMutedUntil > getServerTime();
+  const shouldIgnoreMute = message.isMentioned;
+
   const shouldNotifyAboutMessage = message.content?.action?.type !== 'phoneCall';
-  if (isMuted || !shouldNotifyAboutMessage
-     || chat.isNotJoined || !chat.isListed || selectIsChatWithSelf(global, chat.id)) {
+  if ((isMuted && !shouldIgnoreMute) || !shouldNotifyAboutMessage
+    || chat.isNotJoined || !chat.isListed || selectIsChatWithSelf(global, chat.id)) {
     return false;
   }
   // On touch devices show notifications when chat is not active
@@ -315,27 +297,22 @@ function checkIfShouldNotify(chat: ApiChat, message: Partial<ApiMessage>) {
 
 function getNotificationContent(chat: ApiChat, message: ApiMessage, reaction?: ApiPeerReaction) {
   const global = getGlobal();
-  let {
-    senderId,
-  } = message;
+  let sender = selectSender(global, message);
   const hasReaction = Boolean(reaction);
-  if (hasReaction) senderId = reaction.peerId;
+  if (hasReaction) {
+    sender = selectPeer(global, reaction.peerId);
+  }
 
   const { isScreenLocked } = global.passcode;
-  const messageSenderChat = senderId ? selectChat(global, senderId) : undefined;
-  const messageSenderUser = senderId ? selectUser(global, senderId) : undefined;
   const privateChatUserId = getPrivateChatUserId(chat);
   const isSelf = privateChatUserId === global.currentUserId;
 
   let body: string;
   if (
     !isScreenLocked
-    && selectShouldShowMessagePreview(chat, selectNotifySettings(global), selectNotifyExceptions(global))
+    && getShouldShowMessagePreview(chat, selectNotifyDefaults(global), selectNotifyException(global, chat.id))
   ) {
-    const isChat = chat && (isChatChannel(chat) || message.senderId === message.chatId);
-
-    // TODO[forums] Support ApiChat
-    const senderName = getMessageSenderName(oldTranslate, chat.id, isChat ? messageSenderChat : messageSenderUser);
+    const senderName = sender ? getMessageSenderName(oldTranslate, chat.id, sender) : undefined;
     let summary = jsxToHtml(<span><MessageSummary message={message} /></span>)[0].textContent || '';
 
     if (hasReaction) {
@@ -375,7 +352,6 @@ function getReactionEmoji(reaction: ApiPeerReaction) {
   }
 
   if (reaction.reaction.type === 'custom') {
-    // eslint-disable-next-line eslint-multitab-tt/no-immediate-global
     emoji = getGlobal().customEmojis.byId[reaction.reaction.documentId]?.emoji;
   }
   return emoji || '❤️';
@@ -386,7 +362,7 @@ export async function notifyAboutCall({
 }: {
   call: ApiPhoneCall; user: ApiUser;
 }) {
-  const { hasWebNotifications } = await loadNotificationSettings();
+  const { hasWebNotifications } = selectSettingsKeys(getGlobal());
   if (document.hasFocus() || !hasWebNotifications) return;
   const areNotificationsSupported = checkIfNotificationsSupported();
   if (!areNotificationsSupported) return;
@@ -420,11 +396,18 @@ export async function notifyAboutMessage({
   message,
   isReaction = false,
 }: { chat: ApiChat; message: Partial<ApiMessage>; isReaction?: boolean }) {
-  const { hasWebNotifications } = await loadNotificationSettings();
+  const global = getGlobal();
+  const { hasWebNotifications } = selectSettingsKeys(global);
   if (!checkIfShouldNotify(chat, message)) return;
+  const isChatSilent = getIsChatSilent(
+    chat, selectNotifyDefaults(getGlobal()), selectNotifyException(getGlobal(), chat.id),
+  );
+  const topic = selectTopicFromMessage(global, message as ApiMessage);
+  const isSilent = topic?.notifySettings.hasSound === undefined ? isChatSilent : !topic.notifySettings.hasSound;
+
   const areNotificationsSupported = checkIfNotificationsSupported();
   if (!hasWebNotifications || !areNotificationsSupported) {
-    if (!message.isSilent && !isReaction && !IS_ELECTRON) {
+    if (!isSilent && !message.isSilent && !isReaction && !IS_ELECTRON) {
       // Only play sound if web notifications are disabled
       playNotifySoundDebounced(String(message.id) || chat.id);
     }
@@ -463,7 +446,7 @@ export async function notifyAboutMessage({
           chatId: chat.id,
           messageId: message.id,
           shouldReplaceHistory: true,
-          isSilent: message.isSilent,
+          isSilent: isSilent || message.isSilent,
           reaction: activeReaction?.reaction,
         },
       });

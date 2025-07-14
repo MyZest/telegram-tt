@@ -12,7 +12,7 @@ import {
   omit, pick,
 } from '../../../util/iteratees';
 import { getServerTimeOffset, setServerTimeOffset } from '../../../util/serverTime';
-import { buildApiBotMenuButton } from '../apiBuilders/bots';
+import { buildApiBotCommand, buildApiBotMenuButton } from '../apiBuilders/bots';
 import {
   buildApiGroupCall,
   buildApiGroupCallParticipant,
@@ -22,7 +22,6 @@ import {
 import {
   buildApiChatFolder,
   buildApiChatFromPreview,
-  buildApiChatSettings,
   buildChatMember,
   buildChatMembers,
   buildChatTypingStatus,
@@ -47,8 +46,7 @@ import {
   buildMessageDraft,
 } from '../apiBuilders/messages';
 import {
-  buildApiNotifyException,
-  buildApiNotifyExceptionTopic,
+  buildApiPeerNotifySettings,
   buildLangStrings,
   buildPrivacyKey,
 } from '../apiBuilders/misc';
@@ -62,7 +60,7 @@ import {
 import { buildApiStealthMode, buildApiStory } from '../apiBuilders/stories';
 import { buildApiEmojiInteraction, buildStickerSet } from '../apiBuilders/symbols';
 import {
-  buildApiUser,
+  buildApiPeerSettings,
   buildApiUserStatus,
 } from '../apiBuilders/users';
 import {
@@ -86,8 +84,6 @@ import { processMessageAndUpdateThreadInfo } from './entityProcessor';
 
 import LocalUpdatePremiumFloodWait from './UpdatePremiumFloodWait';
 import { LocalUpdateChannelPts, LocalUpdatePts } from './UpdatePts';
-
-const sentMessageIds = new Set();
 
 export function updater(update: Update) {
   if (update instanceof UpdateServerTimeOffset) {
@@ -161,22 +157,22 @@ export function updater(update: Update) {
 
     if (update instanceof GramJs.UpdateNewScheduledMessage) {
       sendApiUpdate({
-        '@type': sentMessageIds.has(message.id) ? 'updateScheduledMessage' : 'newScheduledMessage',
+        '@type': 'updateScheduledMessage',
         id: message.id,
         chatId: message.chatId,
         message,
         poll,
+        isFromNew: true,
       });
     } else {
-      // We don't have preview for action or 'via bot' messages, so `newMessage` update here is required
-      const hasLocalCopy = sentMessageIds.has(message.id) && !message.viaBotId && !message.content.action;
       sendApiUpdate({
-        '@type': hasLocalCopy ? 'updateMessage' : 'newMessage',
+        '@type': 'updateMessage',
         id: message.id,
         chatId: message.chatId,
         message,
         shouldForceReply,
         poll,
+        isFromNew: true,
       });
     }
 
@@ -221,7 +217,6 @@ export function updater(update: Update) {
           peerId: message.chatId,
         });
       } else if (action instanceof GramJs.MessageActionChatDeleteUser) {
-        // eslint-disable-next-line no-underscore-dangle
         if (update._entities && update._entities.some((e): e is GramJs.User => (
           e instanceof GramJs.User && Boolean(e.self) && e.id === action.userId
         ))) {
@@ -235,7 +230,6 @@ export function updater(update: Update) {
           });
         }
       } else if (action instanceof GramJs.MessageActionChatAddUser) {
-        // eslint-disable-next-line no-underscore-dangle
         if (update._entities && update._entities.some((e): e is GramJs.User => (
           e instanceof GramJs.User && Boolean(e.self) && action.users.includes(e.id)
         ))) {
@@ -245,13 +239,14 @@ export function updater(update: Update) {
           });
         }
       } else if (action instanceof GramJs.MessageActionGroupCall) {
-        if (!action.duration && action.call) {
+        const groupCall = action.call instanceof GramJs.InputGroupCall ? action.call : undefined;
+        if (!action.duration && groupCall) {
           sendApiUpdate({
             '@type': 'updateGroupCallChatId',
             chatId: message.chatId,
             call: {
-              id: action.call.id.toString(),
-              accessHash: action.call.accessHash.toString(),
+              id: groupCall.id.toString(),
+              accessHash: groupCall.accessHash.toString(),
             },
           });
         }
@@ -266,13 +261,13 @@ export function updater(update: Update) {
 
         sendApiUpdate({
           '@type': 'updateTopic',
-          chatId: getApiChatIdFromMtpPeer(update.message.peerId!),
+          chatId: getApiChatIdFromMtpPeer(update.message.peerId),
           topicId,
         });
       } else if (action instanceof GramJs.MessageActionTopicCreate) {
         sendApiUpdate({
           '@type': 'updateTopics',
-          chatId: getApiChatIdFromMtpPeer(update.message.peerId!),
+          chatId: getApiChatIdFromMtpPeer(update.message.peerId),
         });
       }
     }
@@ -415,8 +410,6 @@ export function updater(update: Update) {
         message,
       });
     }
-  } else if (update instanceof GramJs.UpdateMessageID || update instanceof GramJs.UpdateShortSentMessage) {
-    sentMessageIds.add(update.id);
   } else if (update instanceof GramJs.UpdateReadMessagesContents) {
     sendApiUpdate({
       '@type': 'updateCommonBoxMessages',
@@ -538,11 +531,9 @@ export function updater(update: Update) {
       isPinned: update.pinned || false,
     });
   } else if (update instanceof GramJs.UpdatePinnedDialogs) {
-    const ids = update.order
-      ? update.order
-        .filter((dp): dp is GramJs.DialogPeer => dp instanceof GramJs.DialogPeer)
-        .map((dp) => getApiChatIdFromMtpPeer(dp.peer))
-      : [];
+    const ids = update.order?.filter(
+      (dp): dp is GramJs.DialogPeer => dp instanceof GramJs.DialogPeer)
+      .map((dp) => getApiChatIdFromMtpPeer(dp.peer));
 
     sendApiUpdate({
       '@type': 'updatePinnedChatIds',
@@ -632,28 +623,6 @@ export function updater(update: Update) {
       isPinned: update.pinned,
     });
   } else if (
-    update instanceof GramJs.UpdateNotifySettings
-    && update.peer instanceof GramJs.NotifyPeer
-  ) {
-    const payload = buildApiNotifyException(update.notifySettings, update.peer.peer);
-    scheduleMutedChatUpdate(payload.chatId, payload.muteUntil, sendApiUpdate);
-    sendApiUpdate({
-      '@type': 'updateNotifyExceptions',
-      ...payload,
-    });
-  } else if (
-    update instanceof GramJs.UpdateNotifySettings
-    && update.peer instanceof GramJs.NotifyForumTopic
-  ) {
-    const payload = buildApiNotifyExceptionTopic(
-      update.notifySettings, update.peer.peer, update.peer.topMsgId,
-    );
-    scheduleMutedTopicUpdate(payload.chatId, payload.topicId, payload.muteUntil, sendApiUpdate);
-    sendApiUpdate({
-      '@type': 'updateTopicNotifyExceptions',
-      ...payload,
-    });
-  } else if (
     update instanceof GramJs.UpdateUserTyping
     || update instanceof GramJs.UpdateChatUserTyping
   ) {
@@ -686,7 +655,6 @@ export function updater(update: Update) {
       typingStatus: buildChatTypingStatus(update),
     });
   } else if (update instanceof GramJs.UpdateChannel) {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
     const { _entities } = update;
     if (!_entities) {
       return;
@@ -799,56 +767,51 @@ export function updater(update: Update) {
       user: { phoneNumber: phone },
     });
   } else if (update instanceof GramJs.UpdatePeerSettings) {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    const { _entities, settings } = update;
-    if (!_entities) {
+    const { peer, settings } = update;
+    const peerId = getApiChatIdFromMtpPeer(peer);
+    const apiSettings = buildApiPeerSettings(settings);
+    sendApiUpdate({
+      '@type': 'updatePeerSettings',
+      id: peerId,
+      settings: apiSettings,
+    });
+  } else if (update instanceof GramJs.UpdateNotifySettings) {
+    const {
+      notifySettings,
+      peer: notifyPeer,
+    } = update;
+    const className = notifyPeer.className;
+    const settings = buildApiPeerNotifySettings(notifySettings);
+
+    if (notifyPeer instanceof GramJs.NotifyPeer) {
+      const peerId = getApiChatIdFromMtpPeer(notifyPeer.peer);
+      scheduleMutedChatUpdate(peerId, settings.mutedUntil, sendApiUpdate);
+      sendApiUpdate({
+        '@type': 'updateChatNotifySettings',
+        chatId: peerId,
+        settings,
+      });
       return;
     }
 
-    if (_entities?.length) {
-      _entities
-        .filter((e) => e instanceof GramJs.User && !e.contact)
-        .forEach((user) => {
-          sendApiUpdate({
-            '@type': 'deleteContact',
-            id: buildApiPeerId(user.id, 'user'),
-          });
-        });
-
-      _entities
-        .filter((e) => e instanceof GramJs.User && e.contact)
-        .map(buildApiUser)
-        .forEach((user) => {
-          if (!user) {
-            return;
-          }
-
-          sendApiUpdate({
-            '@type': 'updateUser',
-            id: user.id,
-            user: {
-              ...user,
-              ...(settings && { settings: buildApiChatSettings(settings) }),
-            },
-          });
-        });
+    if (notifyPeer instanceof GramJs.NotifyForumTopic) {
+      const peerId = getApiChatIdFromMtpPeer(notifyPeer.peer);
+      scheduleMutedTopicUpdate(peerId, notifyPeer.topMsgId, settings.mutedUntil, sendApiUpdate);
+      sendApiUpdate({
+        '@type': 'updateTopicNotifySettings',
+        chatId: peerId,
+        topicId: notifyPeer.topMsgId,
+        settings,
+      });
+      return;
     }
 
-    // Settings
-  } else if (update instanceof GramJs.UpdateNotifySettings) {
-    const {
-      notifySettings: {
-        showPreviews, silent, muteUntil,
-      },
-      peer: { className },
-    } = update;
-
     const peerType = className === 'NotifyUsers'
-      ? 'contact'
+      ? 'users'
       : (className === 'NotifyChats'
-        ? 'group'
+        ? 'groups'
         : (className === 'NotifyBroadcasts'
-          ? 'broadcast'
+          ? 'channels'
           : undefined
         )
       );
@@ -858,11 +821,9 @@ export function updater(update: Update) {
     }
 
     sendApiUpdate({
-      '@type': 'updateNotifySettings',
+      '@type': 'updateDefaultNotifySettings',
       peerType,
-      isSilent: Boolean(silent
-        || (typeof muteUntil === 'number' && Date.now() + getServerTimeOffset() * 1000 < muteUntil * 1000)),
-      shouldShowPreviews: Boolean(showPreviews),
+      settings,
     });
   } else if (update instanceof GramJs.UpdatePeerBlocked) {
     sendApiUpdate({
@@ -940,11 +901,14 @@ export function updater(update: Update) {
       presentation: Boolean(update.presentation),
     });
   } else if (update instanceof GramJs.UpdateGroupCallParticipants) {
-    sendApiUpdate({
-      '@type': 'updateGroupCallParticipants',
-      groupCallId: getGroupCallId(update.call),
-      participants: update.participants.map(buildApiGroupCallParticipant),
-    });
+    const groupCallId = getGroupCallId(update.call);
+    if (groupCallId) {
+      sendApiUpdate({
+        '@type': 'updateGroupCallParticipants',
+        groupCallId,
+        participants: update.participants.map(buildApiGroupCallParticipant),
+      });
+    }
   } else if (update instanceof GramJs.UpdatePendingJoinRequests) {
     sendApiUpdate({
       '@type': 'updatePendingJoinRequests',
@@ -982,6 +946,19 @@ export function updater(update: Update) {
       '@type': 'updateBotMenuButton',
       botId: id,
       button: buildApiBotMenuButton(button),
+    });
+  } else if (update instanceof GramJs.UpdateBotCommands) {
+    const {
+      botId,
+      commands,
+    } = update;
+
+    const id = buildApiPeerId(botId, 'user');
+    const commandsArray = commands.map((command) => buildApiBotCommand(id, command));
+    sendApiUpdate({
+      '@type': 'updateBotCommands',
+      botId: id,
+      commands: commandsArray.length ? commandsArray : undefined,
     });
   } else if (update instanceof GramJs.UpdateTranscribedAudio) {
     sendApiUpdate({

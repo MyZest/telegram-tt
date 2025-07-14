@@ -23,6 +23,7 @@ export { default as StatusPickerMenu } from '../components/left/main/StatusPicke
 export { default as SuggestedStatusModal } from '../components/modals/suggestedStatus/SuggestedStatusModal';
 export { default as BoostModal } from '../components/modals/boost/BoostModal';
 export { default as GiftCodeModal } from '../components/modals/giftcode/GiftCodeModal';
+export { default as DeleteAccountModal } from '../components/modals/deleteAccount/DeleteAccountModal';
 export { default as ChatlistModal } from '../components/modals/chatlist/ChatlistModal';
 export { default as ChatInviteModal } from '../components/modals/chatInvite/ChatInviteModal';
 
@@ -58,8 +59,7 @@ export { default as ChatFolderModal } from '../components/left/ChatFolderModal';
 export { default as MuteChatModal } from '../components/left/MuteChatModal';
 
 export { default as ContextMenuContainer } from '../components/middle/message/ContextMenuContainer';
-export { default as SponsoredMessageContextMenuContainer }
-  from '../components/middle/message/SponsoredMessageContextMenuContainer';
+export { default as SponsoredContextMenuContainer } from '../components/middle/message/SponsoredContextMenuContainer';
 export { default as StickerSetModal } from '../components/common/StickerSetModal';
 export { default as CustomEmojiSetsModal } from '../components/common/CustomEmojiSetsModal';
 export { default as HeaderMenuContainer } from '../components/middle/HeaderMenuContainer';
@@ -68,6 +68,7 @@ export { default as ReactionPicker } from '../components/middle/message/reaction
 
 export { default as AttachmentModal } from '../components/middle/composer/AttachmentModal';
 export { default as PollModal } from '../components/middle/composer/PollModal';
+export { default as ToDoListModal } from '../components/middle/composer/ToDoListModal';
 export { default as SymbolMenu } from '../components/middle/composer/SymbolMenu';
 export { default as ChatCommandTooltip } from '../components/middle/composer/ChatCommandTooltip';
 export { default as BotCommandMenu } from '../components/middle/composer/BotCommandMenu';
@@ -97,3 +98,4 @@ export { default as ReceiptModal } from '../components/payment/ReceiptModal';
 export { default as InviteViaLinkModal } from '../components/modals/inviteViaLink/InviteViaLinkModal';
 export { default as OneTimeMediaModal } from '../components/modals/oneTimeMedia/OneTimeMediaModal';
 export { default as WebAppsCloseConfirmationModal } from '../components/main/WebAppsCloseConfirmationModal';
+export { default as FrozenAccountModal } from '../components/modals/frozenAccount/FrozenAccountModal';

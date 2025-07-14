@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useRef } from '../../../lib/teact/teact';
+import { memo, useMemo, useRef } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
 import type { ApiSession } from '../../../api/types';
@@ -16,10 +16,9 @@ type OwnProps = {
   onHeightChange: (height: number) => void;
 };
 
-const UnconfirmedSession = ({ sessions, onHeightChange } : OwnProps) => {
+const UnconfirmedSession = ({ sessions, onHeightChange }: OwnProps) => {
   const { changeSessionSettings, terminateAuthorization, showNotification } = getActions();
-  // eslint-disable-next-line no-null/no-null
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>();
   const lang = useOldLang();
 
   useResizeObserver(ref, (entry) => {

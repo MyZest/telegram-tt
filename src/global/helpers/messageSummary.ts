@@ -27,7 +27,7 @@ export function getMessageSummaryText(
   const emoji = !noEmoji && getMessageSummaryEmoji(message);
   const emojiWithSpace = emoji ? `${emoji} ` : '';
   const text = trimText(getMessageTextWithSpoilers(message, statefulContent), truncateLength);
-  const description = getMessageSummaryDescription(lang, message, statefulContent, text, isExtended);
+  const description = getMessageSummaryDescription(lang, message, statefulContent, text, isExtended) as string;
 
   return `${emojiWithSpace}${description}`;
 }
@@ -72,6 +72,7 @@ export function getMessageSummaryEmoji(message: ApiMessage) {
     sticker,
     pollId,
     paidMedia,
+    todo,
   } = message.content;
 
   if (message.groupedId || photo || paidMedia) {
@@ -100,6 +101,10 @@ export function getMessageSummaryEmoji(message: ApiMessage) {
 
   if (pollId) {
     return '📊';
+  }
+
+  if (todo) {
+    return '📝';
   }
 
   return undefined;
@@ -143,6 +148,7 @@ function getSummaryDescription(
     giveaway,
     giveawayResults,
     paidMedia,
+    todo,
   } = mediaContent;
   const { poll } = statefulContent || {};
 
@@ -209,9 +215,9 @@ function getSummaryDescription(
 
   if (text) {
     if (isExtended && summary && !hasUsedTruncatedText) {
-      summary += `\n${truncatedText}`;
+      (summary as string) += `\n${truncatedText as string}`;
     } else {
-      summary = truncatedText;
+      summary = truncatedText as string;
     }
   }
 
@@ -237,6 +243,10 @@ function getSummaryDescription(
 
   if (storyData) {
     summary = truncatedText || (message ? lang('ForwardedStory') : lang('Chat.ReplyStory'));
+  }
+
+  if (todo) {
+    summary = lang('Chat.Todo.Message.Title');
   }
 
   return summary || CONTENT_NOT_SUPPORTED;

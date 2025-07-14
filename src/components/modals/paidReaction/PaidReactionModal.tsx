@@ -1,5 +1,6 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, {
+import type React from '../../../lib/teact/teact';
+import {
   memo, useEffect, useMemo, useState,
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
@@ -14,8 +15,7 @@ import type { TabState } from '../../../global/types';
 import type { CustomPeer } from '../../../types';
 
 import { STARS_ICON_PLACEHOLDER } from '../../../config';
-import { getPeerTitle } from '../../../global/helpers';
-import { isApiPeerUser } from '../../../global/helpers/peers';
+import { getPeerTitle, isApiPeerUser } from '../../../global/helpers/peers';
 import {
   selectChat, selectChatMessage, selectPeer, selectUser,
 } from '../../../global/selectors';
@@ -179,7 +179,7 @@ const PaidReactionModal = ({
 
     return (
       <MenuItem
-        // eslint-disable-next-line react/jsx-no-bind
+
         onClick={() => handleSendAsPeerChange(peerId)}
       >
         <Avatar
@@ -211,6 +211,7 @@ const PaidReactionModal = ({
         ariaLabel={lang('AccDescrOpenMenu2')}
       >
         <Avatar
+          className={styles.sendAsPeerButtonAvatar}
           size="mini"
           peer={shouldSendAsAnonymous ? ANONYMOUS_PEER : senderPeer}
         />
@@ -226,7 +227,7 @@ const PaidReactionModal = ({
     if (!canChangeSendAsPeer) return undefined;
     return (
       <DropdownMenu
-        className={styles.sendAsPeerMenu}
+        className={buildClassName(styles.sendAsPeerMenu, 'with-menu-transitions')}
         bubbleClassName={styles.sendAsPeerMenuBubble}
         trigger={SendAsPeerMenuButton}
         positionX="right"
@@ -342,7 +343,7 @@ const PaidReactionModal = ({
           })}
         </div>
       )}
-      {topReactors && (<Separator className={styles.separator} />) }
+      {topReactors && (<Separator className={styles.separator} />)}
       <Checkbox
         className={buildClassName(styles.checkBox, 'dialog-checkbox')}
         checked={!shouldSendAsAnonymous}

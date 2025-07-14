@@ -11,9 +11,13 @@ import {
   MEDIA_PROGRESSIVE_CACHE_NAME,
 } from '../../../config';
 import { updateAppBadge } from '../../../util/appBadge';
-import { MAIN_IDB_STORE, PASSCODE_IDB_STORE } from '../../../util/browser/idb';
+import { PASSCODE_IDB_STORE } from '../../../util/browser/idb';
+import {
+  IS_WEBM_SUPPORTED, MAX_BUFFER_SIZE, PLATFORM_ENV,
+} from '../../../util/browser/windowEnvironment';
 import * as cacheApi from '../../../util/cacheApi';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { ACCOUNT_SLOT, getAccountsInfo } from '../../../util/multiaccount';
 import { unsubscribe } from '../../../util/notifications';
 import { clearEncryptedSession, encryptSession, forgetPasscode } from '../../../util/passcode';
 import { parseInitialLocationHash, resetInitialLocationHash, resetLocationHash } from '../../../util/routing';
@@ -25,21 +29,36 @@ import {
 } from '../../../util/sessions';
 // import { forceWebsync } from '../../../util/websync';
 import {
-  IS_WEBM_SUPPORTED, MAX_BUFFER_SIZE, PLATFORM_ENV,
-} from '../../../util/windowEnvironment';
-import {
   callApi, callApiLocal, initApi, setShouldEnableDebugLog,
 } from '../../../api/gramjs';
-import { serializeGlobal } from '../../cache';
+import { removeGlobalFromCache, removeSharedStateFromCache, serializeGlobal } from '../../cache';
 import {
   addActionHandler, getGlobal, setGlobal,
 } from '../../index';
 import {
   clearGlobalForLockScreen, updateManagementProgress, updatePasscodeSettings,
 } from '../../reducers';
+import { selectSharedSettings } from '../../selectors/sharedState';
+import { destroySharedStatePort } from '../../shared/sharedStateConnector';
 
 addActionHandler('initApi', (global, actions): ActionReturnType => {
   const initialLocationHash = parseInitialLocationHash();
+  const {
+    shouldAllowHttpTransport,
+    shouldForceHttpTransport,
+    shouldDebugExportedSenders,
+    shouldCollectDebugLogs,
+    language,
+  } = selectSharedSettings(global);
+
+    const hasTestParam = window.location.search.includes('test') || initialLocationHash?.tgWebAuthTest === '1';
+
+  const isTestServer = global.config?.isTestServer;
+  const accountsInfo = getAccountsInfo();
+  const accountIds = Object.values(accountsInfo)
+    .filter((info) => info.isTest === isTestServer)
+    .map(({ userId }) => userId)
+    .filter(Boolean);
 
   const initApiArgs = {
     userAgent: navigator.userAgent,
@@ -50,10 +69,12 @@ addActionHandler('initApi', (global, actions): ActionReturnType => {
     webAuthToken: initialLocationHash?.tgWebAuthToken,
     dcId: initialLocationHash?.tgWebAuthDcId ? Number(initialLocationHash?.tgWebAuthDcId) : undefined,
     mockScenario: initialLocationHash?.mockScenario,
-    shouldAllowHttpTransport: global.settings.byKey.shouldAllowHttpTransport,
-    shouldForceHttpTransport: global.settings.byKey.shouldForceHttpTransport,
-    shouldDebugExportedSenders: global.settings.byKey.shouldDebugExportedSenders,
-    langCode: global.settings.byKey.language,
+    shouldAllowHttpTransport,
+    shouldForceHttpTransport,
+    shouldDebugExportedSenders,
+    langCode: language,
+    isTestServerRequested: hasTestParam,
+    accountIds,
   };
 
   let localStorage = window.localStorage;
@@ -135,11 +156,11 @@ addActionHandler('initApi', (global, actions): ActionReturnType => {
   // console.log('initApiArgs onmessage addActionHandler initApiArgs:', initApiArgs);
   void initApi(actions.apiUpdate, initApiArgs);
 
-  void setShouldEnableDebugLog(Boolean(global.settings.byKey.shouldCollectDebugLogs));
+  void setShouldEnableDebugLog(Boolean(shouldCollectDebugLogs));
 });
 
 addActionHandler('setAuthPhoneNumber', (global, actions, payload): ActionReturnType => {
-  const { phoneNumber } = payload!;
+  const { phoneNumber } = payload;
 
   void callApi('provideAuthPhoneNumber', phoneNumber.replace(/[^\d]/g, ''));
 
@@ -151,7 +172,7 @@ addActionHandler('setAuthPhoneNumber', (global, actions, payload): ActionReturnT
 });
 
 addActionHandler('setAuthCode', (global, actions, payload): ActionReturnType => {
-  const { code } = payload!;
+  const { code } = payload;
 
   void callApi('provideAuthCode', code);
 
@@ -163,7 +184,7 @@ addActionHandler('setAuthCode', (global, actions, payload): ActionReturnType => 
 });
 
 addActionHandler('setAuthPassword', (global, actions, payload): ActionReturnType => {
-  const { password } = payload!;
+  const { password } = payload;
 
   void callApi('provideAuthPassword', password);
 
@@ -178,7 +199,7 @@ addActionHandler('uploadProfilePhoto', async (global, actions, payload): Promise
   const {
     file, isFallback, isVideo, videoTs, bot,
     tabId = getCurrentTabId(),
-  } = payload!;
+  } = payload;
 
   global = updateManagementProgress(global, ManagementProgress.InProgress, tabId);
   setGlobal(global);
@@ -194,7 +215,7 @@ addActionHandler('uploadProfilePhoto', async (global, actions, payload): Promise
 });
 
 addActionHandler('signUp', (global, actions, payload): ActionReturnType => {
-  const { firstName, lastName } = payload!;
+  const { firstName, lastName } = payload;
 
   void callApi('provideAuthRegistration', { firstName, lastName });
 
@@ -231,7 +252,7 @@ addActionHandler('saveSession', (global, actions, payload): ActionReturnType => 
 
   const { sessionData } = payload;
   if (sessionData) {
-    storeSession(sessionData, global.currentUserId);
+    storeSession(sessionData);
   } else {
     clearStoredSession();
   }
@@ -265,7 +286,7 @@ addActionHandler('requestChannelDifference', (global, actions, payload): ActionR
 });
 
 addActionHandler('reset', (global, actions): ActionReturnType => {
-  clearStoredSession();
+  clearStoredSession(ACCOUNT_SLOT);
   clearEncryptedSession();
 
   void cacheApi.clear(MEDIA_CACHE_NAME);
@@ -273,8 +294,15 @@ addActionHandler('reset', (global, actions): ActionReturnType => {
   void cacheApi.clear(MEDIA_PROGRESSIVE_CACHE_NAME);
   void cacheApi.clear(CUSTOM_BG_CACHE_NAME);
 
-  MAIN_IDB_STORE.clear();
-  PASSCODE_IDB_STORE.clear();
+  removeGlobalFromCache();
+  destroySharedStatePort();
+
+  // Check if there are any accounts left
+  const accounts = getAccountsInfo();
+  if (!Object.values(accounts).length) {
+    PASSCODE_IDB_STORE.clear();
+    removeSharedStateFromCache();
+  }
 
   const langCachePrefix = LANG_CACHE_NAME.replace(/\d+$/, '');
   const langCacheVersion = Number((LANG_CACHE_NAME.match(/\d+$/) || ['0'])[0]);
@@ -313,11 +341,12 @@ addActionHandler('loadNearestCountry', async (global): Promise<void> => {
   setGlobal(global);
 });
 
-addActionHandler('setDeviceToken', (global, actions, deviceToken): ActionReturnType => {
+addActionHandler('setDeviceToken', (global, actions, payload): ActionReturnType => {
+  const { token } = payload;
   return {
     ...global,
     push: {
-      deviceToken,
+      deviceToken: token,
       subscribedAt: Date.now(),
     },
   };
@@ -332,7 +361,7 @@ addActionHandler('deleteDeviceToken', (global): ActionReturnType => {
 
 addActionHandler('lockScreen', async (global): Promise<void> => {
   const sessionJson = JSON.stringify({ ...loadStoredSession(), userId: global.currentUserId });
-  const globalJson = await serializeGlobal(global);
+  const globalJson = serializeGlobal(global);
 
   await encryptSession(sessionJson, globalJson);
   forgetPasscode();

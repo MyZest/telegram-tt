@@ -1,4 +1,5 @@
-import React, {
+import type React from '../../../lib/teact/teact';
+import {
   memo, useEffect, useMemo, useState,
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
@@ -7,7 +8,9 @@ import type { ApiStarTopupOption } from '../../../api/types';
 import type { GlobalState, TabState } from '../../../global/types';
 import type { RegularLangKey } from '../../../types/language';
 
-import { getChatTitle, getPeerTitle, getUserFullName } from '../../../global/helpers';
+import { PAID_MESSAGES_PURPOSE } from '../../../config';
+import { getChatTitle, getUserFullName } from '../../../global/helpers';
+import { getPeerTitle } from '../../../global/helpers/peers';
 import { selectChat, selectIsPremiumPurchaseBlocked, selectUser } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import renderText from '../../common/helpers/renderText';
@@ -108,6 +111,13 @@ const StarsBalanceModal = ({
       return oldLang('StarsNeededTextLink');
     }
 
+    if (topup?.purpose === PAID_MESSAGES_PURPOSE) {
+      return lang('StarsNeededTextSendPaidMessages', undefined, {
+        withMarkdown: true,
+        withNodes: true,
+      });
+    }
+
     return undefined;
   }, [originReaction, originStarsPayment, originGift, topup?.purpose, lang, oldLang]);
 
@@ -180,7 +190,7 @@ const StarsBalanceModal = ({
 
   return (
     <Modal
-      className={buildClassName(styles.root, !shouldForceHeight && styles.minimal)}
+      className={buildClassName(styles.root, !shouldForceHeight && !areBuyOptionsShown && styles.minimal)}
       isOpen={isOpen}
       onClose={closeStarsBalanceModal}
     >
@@ -190,7 +200,7 @@ const StarsBalanceModal = ({
           size="smaller"
           className={styles.closeButton}
           color="translucent"
-          // eslint-disable-next-line react/jsx-no-bind
+
           onClick={() => closeStarsBalanceModal()}
           ariaLabel={lang('Close')}
         >

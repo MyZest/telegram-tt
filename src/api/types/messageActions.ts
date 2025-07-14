@@ -1,6 +1,7 @@
 import type { ApiGroupCall, ApiPhoneCallDiscardReason } from './calls';
 import type { ApiBotApp, ApiFormattedText, ApiPhoto } from './messages';
-import type { ApiStarGiftRegular, ApiStarGiftUnique } from './payments';
+import type { ApiTodoItem } from './messages';
+import type { ApiStarGiftRegular, ApiStarGiftUnique } from './stars';
 
 interface ActionMediaType {
   mediaType: 'action';
@@ -254,6 +255,7 @@ export interface ApiMessageActionStarGiftUnique extends ActionMediaType {
   fromId?: string;
   peerId?: string;
   savedId?: string;
+  resaleStars?: number;
 }
 
 export interface ApiMessageActionChannelJoined extends ActionMediaType {
@@ -268,20 +270,45 @@ export interface ApiMessageActionExpiredContent extends ActionMediaType {
   isRoundVideo?: true;
 }
 
+export interface ApiMessageActionPaidMessagesRefunded extends ActionMediaType {
+  type: 'paidMessagesRefunded';
+  count: number;
+  stars: number;
+}
+
+export interface ApiMessageActionPaidMessagesPrice extends ActionMediaType {
+  type: 'paidMessagesPrice';
+  stars: number;
+  isAllowedInChannel?: boolean;
+}
+
+export interface ApiMessageActionTodoCompletions extends ActionMediaType {
+  type: 'todoCompletions';
+  completedIds: number[];
+  incompletedIds: number[];
+}
+
+export interface ApiMessageActionTodoAppendTasks extends ActionMediaType {
+  type: 'todoAppendTasks';
+  items: ApiTodoItem[];
+}
+
 export interface ApiMessageActionUnsupported extends ActionMediaType {
   type: 'unsupported';
 }
 
 export type ApiMessageAction = ApiMessageActionUnsupported | ApiMessageActionChatCreate | ApiMessageActionChatEditTitle
-| ApiMessageActionChatEditPhoto | ApiMessageActionChatDeletePhoto | ApiMessageActionChatAddUser
-| ApiMessageActionChatDeleteUser | ApiMessageActionChatJoinedByLink | ApiMessageActionChannelCreate
-| ApiMessageActionChatMigrateTo | ApiMessageActionChannelMigrateFrom | ApiMessageActionPinMessage
-| ApiMessageActionHistoryClear | ApiMessageActionGameScore | ApiMessageActionPaymentSent | ApiMessageActionPhoneCall
-| ApiMessageActionScreenshotTaken | ApiMessageActionCustomAction | ApiMessageActionBotAllowed
-| ApiMessageActionBoostApply | ApiMessageActionContactSignUp | ApiMessageActionExpiredContent
-| ApiMessageActionGroupCall | ApiMessageActionInviteToGroupCall | ApiMessageActionGroupCallScheduled
-| ApiMessageActionChatJoinedByRequest | ApiMessageActionWebViewDataSent | ApiMessageActionGiftPremium
-| ApiMessageActionTopicCreate | ApiMessageActionTopicEdit | ApiMessageActionSuggestProfilePhoto
-| ApiMessageActionChannelJoined | ApiMessageActionGiftCode | ApiMessageActionGiveawayLaunch
-| ApiMessageActionGiveawayResults | ApiMessageActionPaymentRefunded | ApiMessageActionGiftStars
-| ApiMessageActionPrizeStars | ApiMessageActionStarGift | ApiMessageActionStarGiftUnique;
+  | ApiMessageActionChatEditPhoto | ApiMessageActionChatDeletePhoto | ApiMessageActionChatAddUser
+  | ApiMessageActionChatDeleteUser | ApiMessageActionChatJoinedByLink | ApiMessageActionChannelCreate
+  | ApiMessageActionChatMigrateTo | ApiMessageActionChannelMigrateFrom | ApiMessageActionPinMessage
+  | ApiMessageActionHistoryClear | ApiMessageActionGameScore | ApiMessageActionPaymentSent | ApiMessageActionPhoneCall
+  | ApiMessageActionScreenshotTaken | ApiMessageActionCustomAction | ApiMessageActionBotAllowed
+  | ApiMessageActionBoostApply | ApiMessageActionContactSignUp | ApiMessageActionExpiredContent
+  | ApiMessageActionGroupCall | ApiMessageActionInviteToGroupCall | ApiMessageActionGroupCallScheduled
+  | ApiMessageActionChatJoinedByRequest | ApiMessageActionWebViewDataSent | ApiMessageActionGiftPremium
+  | ApiMessageActionTopicCreate | ApiMessageActionTopicEdit | ApiMessageActionSuggestProfilePhoto
+  | ApiMessageActionChannelJoined | ApiMessageActionGiftCode | ApiMessageActionGiveawayLaunch
+  | ApiMessageActionGiveawayResults | ApiMessageActionPaymentRefunded | ApiMessageActionGiftStars
+  | ApiMessageActionPrizeStars | ApiMessageActionStarGift | ApiMessageActionStarGiftUnique
+  | ApiMessageActionPaidMessagesRefunded | ApiMessageActionPaidMessagesPrice | ApiMessageActionTodoCompletions
+  | ApiMessageActionTodoAppendTasks;

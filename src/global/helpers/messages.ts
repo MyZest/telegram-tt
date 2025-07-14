@@ -9,9 +9,7 @@ import type {
 import type {
   ApiPoll, MediaContainer, StatefulMediaContent,
 } from '../../api/types/messages';
-import type { OldLangFn } from '../../hooks/useOldLang';
-import type { CustomPeer, ThreadId } from '../../types';
-import type { LangFn } from '../../util/localization';
+import type { ThreadId } from '../../types';
 import type { GlobalState } from '../types';
 import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../../api/types';
 
@@ -27,14 +25,12 @@ import {
   VERIFICATION_CODES_USER_ID,
   VIDEO_STICKER_MIME_TYPE,
 } from '../../config';
+import { getCleanPeerId, isUserId } from '../../util/entities/ids';
 import { areSortedArraysIntersecting, unique } from '../../util/iteratees';
 import { isLocalMessageId } from '../../util/keys/messageKey';
 import { getServerTime } from '../../util/serverTime';
 import { getGlobal } from '../index';
-import {
-  getChatTitle, getCleanPeerId, isPeerUser, isUserId,
-} from './chats';
-import { getMainUsername, getUserFirstOrLastName, getUserFullName } from './users';
+import { getMainUsername } from './users';
 
 const RE_LINK = new RegExp(RE_LINK_TEMPLATE, 'i');
 
@@ -49,7 +45,6 @@ export function getMessageOriginalId(message: ApiMessage) {
 
 export function getMessageTranscription(message: ApiMessage) {
   const { transcriptionId } = message;
-  // eslint-disable-next-line eslint-multitab-tt/no-immediate-global
   const global = getGlobal();
 
   return transcriptionId && global.transcriptions[transcriptionId]?.text;
@@ -57,13 +52,14 @@ export function getMessageTranscription(message: ApiMessage) {
 
 export function hasMessageText(message: MediaContainer) {
   const {
-    action, text, sticker, photo, video, audio, voice, document, pollId, webPage, contact, invoice, location,
-    game, storyData, giveaway, giveawayResults, paidMedia,
+    action, text, sticker, photo, video, audio, voice, document, pollId, todo,
+    webPage, contact, invoice, location, game, storyData, giveaway, giveawayResults, paidMedia,
   } = message.content;
 
   return Boolean(text) || !(
-    sticker || photo || video || audio || voice || document || contact || pollId || webPage || invoice || location
-    || game || storyData || giveaway || giveawayResults || paidMedia || action?.type === 'phoneCall'
+    sticker || photo || video || audio || voice || document || contact || pollId || todo || webPage
+    || invoice || location || game || storyData || giveaway || giveawayResults
+    || paidMedia || action?.type === 'phoneCall'
   );
 }
 
@@ -79,7 +75,7 @@ export function getMessageStatefulContent(global: GlobalState, message: ApiMessa
 export function groupStatefulContent({
   poll,
   story,
-} : {
+}: {
   poll?: ApiPoll;
   story?: ApiTypeStory;
 }) {
@@ -207,24 +203,6 @@ export function isServiceNotificationMessage(message: ApiMessage) {
 
 export function isAnonymousOwnMessage(message: ApiMessage) {
   return Boolean(message.senderId) && !isUserId(message.senderId) && isOwnMessage(message);
-}
-
-export function getPeerTitle(lang: OldLangFn | LangFn, peer: ApiPeer | CustomPeer) {
-  if (!peer) return undefined;
-  if ('isCustomPeer' in peer) {
-    // TODO: Remove any after full migration to new lang
-    return peer.titleKey ? lang(peer.titleKey as any) : peer.title;
-  }
-  return isPeerUser(peer) ? getUserFirstOrLastName(peer) : getChatTitle(lang, peer);
-}
-
-export function getPeerFullTitle(lang: OldLangFn | LangFn, peer: ApiPeer | CustomPeer) {
-  if (!peer) return undefined;
-  if ('isCustomPeer' in peer) {
-    // TODO: Remove any after full migration to new lang
-    return peer.titleKey ? lang(peer.titleKey as any) : peer.title;
-  }
-  return isPeerUser(peer) ? getUserFullName(peer) : getChatTitle(lang, peer);
 }
 
 export function getSendingState(message: ApiMessage) {

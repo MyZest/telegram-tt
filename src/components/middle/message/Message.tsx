@@ -1,5 +1,6 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, {
+import type React from '../../../lib/teact/teact';
+import {
   memo,
   useCallback,
   useEffect,
@@ -33,9 +34,9 @@ import type {
   ChatTranslatedMessages,
   FocusDirection,
   IAlbum,
-  ISettings,
   MessageListType,
   ScrollTargetPosition,
+  ThemeKey,
   ThreadId,
 } from '../../../types';
 import type { Signal } from '../../../util/signals';
@@ -47,13 +48,13 @@ import { EMOJI_STATUS_LOOP_LIMIT, MESSAGE_APPEARANCE_DELAY } from '../../../conf
 import {
   areReactionsEmpty,
   getIsDownloading,
+  getMainUsername,
   getMessageContent,
   getMessageCustomShape,
   getMessageDownloadableMedia,
   getMessageHtmlId,
   getMessageSingleCustomEmoji,
   getMessageSingleRegularEmoji,
-  getPeerTitle,
   hasMessageText,
   hasMessageTtl,
   isAnonymousForwardsChat,
@@ -67,8 +68,8 @@ import {
   isOwnMessage,
   isReplyToMessage,
   isSystemBot,
-  isUserId,
 } from '../../../global/helpers';
+import { getPeerFullTitle } from '../../../global/helpers/peers';
 import { getMessageReplyInfo, getStoryReplyInfo } from '../../../global/helpers/replies';
 import {
   selectActiveDownloads,
@@ -85,6 +86,7 @@ import {
   selectForwardedSender,
   selectIsChatProtected,
   selectIsChatWithSelf,
+  selectIsCurrentUserFrozen,
   selectIsCurrentUserPremium,
   selectIsDocumentGroupSelected,
   selectIsInSelectMode,
@@ -113,11 +115,13 @@ import {
   selectUploadProgress,
   selectUser,
 } from '../../../global/selectors';
+import { selectSharedSettings } from '../../../global/selectors/sharedState';
+import { IS_ANDROID, IS_ELECTRON, IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import { isUserId } from '../../../util/entities/ids';
 import { getMessageKey } from '../../../util/keys/messageKey';
 import stopEvent from '../../../util/stopEvent';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
-import { IS_ANDROID, IS_ELECTRON, IS_TRANSLATION_SUPPORTED } from '../../../util/windowEnvironment';
 import { calculateDimensionsForMessageMedia, getStickerDimensions, REM } from '../../common/helpers/mediaDimensions';
 import { getPeerColorClass } from '../../common/helpers/peerColor';
 import renderText from '../../common/helpers/renderText';
@@ -185,6 +189,7 @@ import RoundVideo from './RoundVideo';
 import Sticker from './Sticker';
 import Story from './Story';
 import StoryMention from './StoryMention';
+import TodoList from './TodoList';
 import Video from './Video';
 import WebPage from './WebPage';
 
@@ -221,7 +226,7 @@ type OwnProps =
   & MessagePositionProperties;
 
 type StateProps = {
-  theme: ISettings['theme'];
+  theme: ThemeKey;
   forceSenderName?: boolean;
   sender?: ApiPeer;
   canShowSender: boolean;
@@ -244,6 +249,7 @@ type StateProps = {
   isFocused?: boolean;
   focusDirection?: FocusDirection;
   focusedQuote?: string;
+  focusedQuoteOffset?: number;
   noFocusHighlight?: boolean;
   scrollTargetPosition?: ScrollTargetPosition;
   isResizingContainer?: boolean;
@@ -301,6 +307,9 @@ type StateProps = {
   poll?: ApiPoll;
   maxTimestamp?: number;
   lastPlaybackTimestamp?: number;
+  paidMessageStars?: number;
+  isChatWithUser?: boolean;
+  isAccountFrozen?: boolean;
 };
 
 type MetaPosition =
@@ -365,6 +374,7 @@ const Message: FC<OwnProps & StateProps> = ({
   isFocused,
   focusDirection,
   focusedQuote,
+  focusedQuoteOffset,
   noFocusHighlight,
   scrollTargetPosition,
   isResizingContainer,
@@ -421,6 +431,9 @@ const Message: FC<OwnProps & StateProps> = ({
   maxTimestamp,
   lastPlaybackTimestamp,
   onIntersectPinnedMessage,
+  paidMessageStars,
+  isChatWithUser,
+  isAccountFrozen,
 }) => {
   const {
     toggleMessageSelection,
@@ -431,12 +444,9 @@ const Message: FC<OwnProps & StateProps> = ({
     markMentionsRead,
   } = getActions();
 
-  // eslint-disable-next-line no-null/no-null
-  const ref = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line no-null/no-null
-  const bottomMarkerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line no-null/no-null
-  const quickReactionRef = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>();
+  const bottomMarkerRef = useRef<HTMLDivElement>();
+  const quickReactionRef = useRef<HTMLDivElement>();
 
   const lang = useOldLang();
 
@@ -458,7 +468,7 @@ const Message: FC<OwnProps & StateProps> = ({
     handleContextMenuHide,
   } = useContextMenuHandlers(
     ref,
-    isTouchScreen && isInSelectMode,
+    (isTouchScreen && isInSelectMode) || isAccountFrozen,
     !IS_ELECTRON,
     IS_ANDROID,
     getIsMessageListReady,
@@ -511,7 +521,7 @@ const Message: FC<OwnProps & StateProps> = ({
     voice, document, sticker, contact,
     webPage, invoice, location,
     action, game, storyData, giveaway,
-    giveawayResults,
+    giveawayResults, todo,
   } = getMessageContent(message);
 
   const messageReplyInfo = getMessageReplyInfo(message);
@@ -550,7 +560,7 @@ const Message: FC<OwnProps & StateProps> = ({
     && !((sticker || hasAnimatedEmoji) && asForwarded)
   );
   const canForward = isChannel && !isScheduled && message.isForwardingAllowed
-  && !isChatProtected;
+    && !isChatProtected;
   const canFocus = Boolean(isPinnedList
     || (forwardInfo
       && (forwardInfo.isChannelPost || isChatWithSelf || isRepliesChat || isAnonymousForwards)
@@ -563,11 +573,12 @@ const Message: FC<OwnProps & StateProps> = ({
   const hasSubheader = hasTopicChip || hasMessageReply || hasStoryReply || hasForwardedCustomShape;
 
   const selectMessage = useLastCallback((e?: React.MouseEvent<HTMLDivElement, MouseEvent>, groupedId?: string) => {
+    if (isAccountFrozen) return;
     toggleMessageSelection({
       messageId,
       groupedId,
       ...(e?.shiftKey && { withShift: true }),
-      ...(isAlbum && { childMessageIds: album!.messages.map(({ id }) => id) }),
+      ...(isAlbum && { childMessageIds: album.messages.map(({ id }) => id) }),
     });
   });
 
@@ -724,7 +735,7 @@ const Message: FC<OwnProps & StateProps> = ({
   const text = textMessage && getMessageContent(textMessage).text;
   const isInvertedMedia = Boolean(message.isInvertedMedia);
 
-  const { replyToMsgId, replyToPeerId, isQuote } = messageReplyInfo || {};
+  const { replyToMsgId, replyToPeerId } = messageReplyInfo || {};
   const { peerId: storyReplyPeerId, storyId: storyReplyId } = storyReplyInfo || {};
 
   useEffect(() => {
@@ -737,7 +748,7 @@ const Message: FC<OwnProps & StateProps> = ({
 
   const detectedLanguage = useTextLanguage(
     text?.text,
-    !(areTranslationsEnabled || shouldDetectChatLanguage),
+    !(areTranslationsEnabled && shouldDetectChatLanguage),
     getIsMessageListReady,
   );
   useDetectChatLanguage(message, detectedLanguage, !shouldDetectChatLanguage, getIsMessageListReady);
@@ -761,7 +772,7 @@ const Message: FC<OwnProps & StateProps> = ({
     && !isInDocumentGroupNotLast && messageListType === 'thread'
     && !noComments;
   const withQuickReactionButton = !isTouchScreen && !phoneCall && !isInSelectMode && defaultReaction
-    && !isInDocumentGroupNotLast && !isStoryMention && !hasTtl;
+    && !isInDocumentGroupNotLast && !isStoryMention && !hasTtl && !isAccountFrozen;
 
   const hasOutsideReactions = !withVoiceTranscription && hasReactions
     && (isCustomShape || ((photo || video || storyData || (location?.mediaType === 'geo')) && !hasText));
@@ -786,6 +797,10 @@ const Message: FC<OwnProps & StateProps> = ({
 
   const withAppendix = contentClassName.includes('has-appendix');
   const emojiSize = getCustomEmojiSize(message.emojiOnlyCount);
+
+  const paidMessageStarsInMeta = !isChatWithUser
+    ? (isAlbum && paidMessageStars ? album.messages.length * paidMessageStars : paidMessageStars)
+    : undefined;
 
   let metaPosition!: MetaPosition;
   if (phoneCall) {
@@ -821,7 +836,7 @@ const Message: FC<OwnProps & StateProps> = ({
     replyToMsgId,
     replyMessage,
     message.id,
-    shouldHideReply || isQuote || isReplyPrivate,
+    shouldHideReply || isReplyPrivate,
   );
 
   useEnsureStory(
@@ -842,7 +857,7 @@ const Message: FC<OwnProps & StateProps> = ({
     scrollTargetPosition,
   });
 
-  const viaBusinessBotTitle = viaBusinessBot ? getPeerTitle(lang, viaBusinessBot) : undefined;
+  const viaBusinessBotTitle = viaBusinessBot ? getPeerFullTitle(lang, viaBusinessBot) : undefined;
 
   const canShowPostAuthor = !message.senderId;
   const signature = viaBusinessBotTitle || (canShowPostAuthor && message.postAuthorTitle)
@@ -869,13 +884,13 @@ const Message: FC<OwnProps & StateProps> = ({
     }
 
     if (unreadMentionIds.length) {
-      markMentionsRead({ messageIds: unreadMentionIds });
+      markMentionsRead({ chatId, messageIds: unreadMentionIds });
     }
-  }, [hasUnreadReaction, album, messageId, animateUnreadReaction, message.hasUnreadMention]);
+  }, [hasUnreadReaction, album, chatId, messageId, animateUnreadReaction, message.hasUnreadMention]);
 
   const albumLayout = useMemo(() => {
     return isAlbum
-      ? calculateAlbumLayout(isOwn, Boolean(noAvatars), album!, isMobile)
+      ? calculateAlbumLayout(isOwn, Boolean(noAvatars), album, isMobile)
       : undefined;
   }, [isAlbum, isOwn, noAvatars, album, isMobile]);
 
@@ -962,6 +977,7 @@ const Message: FC<OwnProps & StateProps> = ({
         translatedText={requestedTranslationLanguage ? currentTranslatedText : undefined}
         isForAnimation={isForAnimation}
         focusedQuote={focusedQuote}
+        focusedQuoteOffset={focusedQuoteOffset}
         emojiSize={emojiSize}
         highlight={highlight}
         isProtected={isProtected}
@@ -1019,6 +1035,7 @@ const Message: FC<OwnProps & StateProps> = ({
         onEffectClick={handleEffectClick}
         onTranslationClick={handleTranslationClick}
         onOpenThread={handleOpenThread}
+        paidMessageStars={paidMessageStarsInMeta}
       />
     );
 
@@ -1035,6 +1052,7 @@ const Message: FC<OwnProps & StateProps> = ({
         noRecentReactors={isChannel}
         tags={tags}
         isCurrentUserPremium={isPremium}
+        isAccountFrozen={isAccountFrozen}
       />
     );
   }
@@ -1119,7 +1137,7 @@ const Message: FC<OwnProps & StateProps> = ({
         {hasAnimatedEmoji && animatedCustomEmoji && (
           <AnimatedCustomEmoji
             customEmojiId={animatedCustomEmoji}
-            withEffects={withAnimatedEffects && isUserId(chatId) && !effect}
+            withEffects={withAnimatedEffects && isChatWithUser && !effect}
             isOwn={isOwn}
             observeIntersection={observeIntersectionForLoading}
             forceLoadPreview={isLocal}
@@ -1131,7 +1149,7 @@ const Message: FC<OwnProps & StateProps> = ({
         {hasAnimatedEmoji && animatedEmoji && (
           <AnimatedEmoji
             emoji={animatedEmoji}
-            withEffects={withAnimatedEffects && isUserId(chatId) && !effect}
+            withEffects={withAnimatedEffects && isChatWithUser && !effect}
             isOwn={isOwn}
             observeIntersection={observeIntersectionForLoading}
             forceLoadPreview={isLocal}
@@ -1223,6 +1241,9 @@ const Message: FC<OwnProps & StateProps> = ({
         )}
         {poll && (
           <Poll message={message} poll={poll} onSendVote={handleVoteSend} />
+        )}
+        {todo && (
+          <TodoList message={message} todoList={todo} />
         )}
         {(giveaway || giveawayResults) && (
           <Giveaway message={message} />
@@ -1385,7 +1406,7 @@ const Message: FC<OwnProps & StateProps> = ({
       <>
         {isAlbum && observeIntersectionForLoading && (
           <Album
-            album={album!}
+            album={album}
             albumLayout={albumLayout!}
             observeIntersection={observeIntersectionForLoading}
             isOwn={isOwn}
@@ -1468,21 +1489,23 @@ const Message: FC<OwnProps & StateProps> = ({
     );
   }
 
-  function renderSenderName(shouldSkipRenderForwardTitle:boolean = false, shouldSkipRenderAdminTitle: boolean = false) {
+  function renderSenderName(
+    shouldSkipRenderForwardTitle: boolean = false, shouldSkipRenderAdminTitle: boolean = false,
+  ) {
     let senderTitle;
     let senderColor;
     if (senderPeer && !(isCustomShape && viaBotId)) {
-      senderTitle = getPeerTitle(lang, senderPeer);
+      senderTitle = getPeerFullTitle(lang, senderPeer);
     } else if (forwardInfo?.hiddenUserName) {
       senderTitle = forwardInfo.hiddenUserName;
     } else if (storyData && originSender) {
-      senderTitle = getPeerTitle(lang, originSender!);
+      senderTitle = getPeerFullTitle(lang, originSender);
     }
     const senderEmojiStatus = senderPeer && 'emojiStatus' in senderPeer && senderPeer.emojiStatus;
     const senderIsPremium = senderPeer && 'isPremium' in senderPeer && senderPeer.isPremium;
 
     const shouldRenderForwardAvatar = asForwarded && senderPeer;
-    const hasBotSenderUsername = botSender?.usernames?.length;
+    const hasBotSenderUsername = botSender?.hasUsername;
     return (
       <div className="message-title" dir="ltr">
         {(senderTitle || asForwarded) ? (
@@ -1526,14 +1549,14 @@ const Message: FC<OwnProps & StateProps> = ({
         ) : !botSender ? (
           NBSP
         ) : undefined}
-        {botSender?.usernames?.length && (
+        {botSender?.hasUsername && (
           <span className="interactive">
             <span className="via">{lang('ViaBot')}</span>
             <span
               className="sender-title"
               onClick={handleViaBotClick}
             >
-              {renderText(`@${botSender.usernames[0].username}`)}
+              {renderText(`@${getMainUsername(botSender)}`)}
             </span>
           </span>
         )}
@@ -1686,6 +1709,7 @@ const Message: FC<OwnProps & StateProps> = ({
             observeIntersection={observeIntersectionForPlaying}
             noRecentReactors={isChannel}
             tags={tags}
+            isAccountFrozen={isAccountFrozen}
           />
         )}
       </div>
@@ -1719,7 +1743,11 @@ export default memo(withGlobal<OwnProps>(
     } = ownProps;
     const {
       id, chatId, viaBotId, isOutgoing, forwardInfo, transcriptionId, isPinned, viaBusinessBotId, effectId,
+      paidMessageStars,
     } = message;
+
+    const { shouldWarnAboutSvg } = selectSharedSettings(global);
+    const isChatWithUser = isUserId(chatId);
 
     const chat = selectChat(global, chatId);
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
@@ -1727,7 +1755,7 @@ export default memo(withGlobal<OwnProps>(
     const isAnonymousForwards = isAnonymousForwardsChat(chatId);
     const isChannel = chat && isChatChannel(chat);
     const isGroup = chat && isChatGroup(chat);
-    const chatFullInfo = !isUserId(chatId) ? selectChatFullInfo(global, chatId) : undefined;
+    const chatFullInfo = !isChatWithUser ? selectChatFullInfo(global, chatId) : undefined;
     const webPageStoryData = message.content.webPage?.story;
     const webPageStory = webPageStoryData
       ? selectPeerStory(global, webPageStoryData.peerId, webPageStoryData.id)
@@ -1774,7 +1802,7 @@ export default memo(withGlobal<OwnProps>(
 
     const {
       direction: focusDirection, noHighlight: noFocusHighlight, isResizingContainer,
-      quote: focusedQuote, scrollTargetPosition,
+      quote: focusedQuote, quoteOffset: focusedQuoteOffset, scrollTargetPosition,
     } = (isFocused && focusedMessage) || {};
 
     const middleSearch = selectCurrentMiddleSearch(global);
@@ -1841,6 +1869,7 @@ export default memo(withGlobal<OwnProps>(
     const maxTimestamp = selectMessageTimestampableDuration(global, message);
 
     const lastPlaybackTimestamp = selectMessageLastPlaybackTimestamp(global, chatId, message.id);
+    const isAccountFrozen = selectIsCurrentUserFrozen(global);
 
     return {
       theme: selectTheme(global),
@@ -1913,7 +1942,7 @@ export default memo(withGlobal<OwnProps>(
       isLoadingComments: repliesThreadInfo?.isCommentsInfo
         && loadingThread?.loadingChatId === repliesThreadInfo?.originChannelId
         && loadingThread?.loadingMessageId === repliesThreadInfo?.originMessageId,
-      shouldWarnAboutSvg: global.settings.byKey.shouldWarnAboutSvg,
+      shouldWarnAboutSvg,
       ...(isOutgoing && { outgoingStatus: selectOutgoingStatus(global, message, messageListType === 'scheduled') }),
       ...(typeof uploadProgress === 'number' && { uploadProgress }),
       ...(isFocused && {
@@ -1921,6 +1950,7 @@ export default memo(withGlobal<OwnProps>(
         noFocusHighlight,
         isResizingContainer,
         focusedQuote,
+        focusedQuoteOffset,
         scrollTargetPosition,
       }),
       senderBoosts,
@@ -1931,6 +1961,9 @@ export default memo(withGlobal<OwnProps>(
       poll,
       maxTimestamp,
       lastPlaybackTimestamp,
+      paidMessageStars,
+      isChatWithUser,
+      isAccountFrozen,
     };
   },
 )(Message));

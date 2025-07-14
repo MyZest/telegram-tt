@@ -28,7 +28,7 @@ import {
 import { buildApiPeerId } from '../apiBuilders/peers';
 import { buildApiStory } from '../apiBuilders/stories';
 import { buildApiUser, buildApiUserFullInfo } from '../apiBuilders/users';
-import { buildInputPeerFromLocalDb, getEntityTypeById } from '../gramjsBuilders';
+import { buildInputChannelFromLocalDb, buildInputPeerFromLocalDb, getEntityTypeById } from '../gramjsBuilders';
 import {
   addStoryToLocalDb, addUserToLocalDb,
 } from '../helpers/localDb';
@@ -76,14 +76,13 @@ export async function init(initialArgs: ApiInitialArgs) {
   const {
     userAgent, platform, sessionData, isWebmSupported, maxBufferSize, webAuthToken, dcId,
     mockScenario, shouldForceHttpTransport, shouldAllowHttpTransport,
-    shouldDebugExportedSenders, langCode, isTestServerRequested,
+    shouldDebugExportedSenders, langCode, isTestServerRequested, accountIds,
   } = initialArgs;
 
   const session = new sessions.CallbackSession(sessionData, onSessionUpdate);
 
-  // eslint-disable-next-line no-restricted-globals
   (self as any).isWebmSupported = isWebmSupported;
-  // eslint-disable-next-line no-restricted-globals
+
   (self as any).maxBufferSize = maxBufferSize;
 
   // @ts-ignore;
@@ -131,9 +130,8 @@ export async function init(initialArgs: ApiInitialArgs) {
     if (DEBUG) {
       log('CONNECTING');
 
-      // eslint-disable-next-line no-restricted-globals
       (self as any).invoke = invokeRequest;
-      // eslint-disable-next-line no-restricted-globals
+
       (self as any).GramJs = GramJs;
     }
 
@@ -151,6 +149,7 @@ export async function init(initialArgs: ApiInitialArgs) {
         webAuthToken,
         webAuthTokenFailed: onWebAuthTokenFailed,
         mockScenario,
+        accountIds,
       });
     } catch (err: any) {
       // eslint-disable-next-line no-console
@@ -235,7 +234,7 @@ export function handleGramJsUpdate(update: any) {
     const updates = 'updates' in update ? update.updates : [update];
     updates.forEach((nestedUpdate: any) => {
       if (!(nestedUpdate instanceof GramJs.UpdateConfig)) return;
-      // eslint-disable-next-line no-underscore-dangle
+
       const currentUser = (nestedUpdate as UpdateConfig)._entities
         ?.find((entity) => entity instanceof GramJs.User && buildApiPeerId(entity.id, 'user') === currentUserId);
       if (!(currentUser instanceof GramJs.User)) return;
@@ -322,6 +321,12 @@ export async function invokeRequest<T extends GramJs.AnyRequest>(
       console.debug('invokeRequest failed with payload', request);
       // eslint-disable-next-line no-console
       console.error(err);
+    }
+
+    const message = err instanceof RPCError ? err.errorMessage : err.message;
+
+    if (message.includes('FROZEN_METHOD_INVALID')) {
+      dispatchNotSupportedInFrozenAccountUpdate(err, request);
     }
 
     if (shouldThrow) {
@@ -458,6 +463,27 @@ export function dispatchErrorUpdate<T extends GramJs.AnyRequest>(err: Error, req
   });
 }
 
+function dispatchNotSupportedInFrozenAccountUpdate<T extends GramJs.AnyRequest>(err: Error, request: T) {
+  if (!(err instanceof RPCError)) return;
+  const message = err.errorMessage;
+
+  if (
+    request instanceof GramJs.messages.GetPinnedDialogs
+    || request instanceof GramJs.phone.GetGroupParticipants
+    || request instanceof GramJs.channels.GetParticipant
+    || request instanceof GramJs.channels.GetParticipants
+    || request instanceof GramJs.channels.GetForumTopics) {
+    return;
+  }
+
+  sendApiUpdate({
+    '@type': 'notSupportedInFrozenAccount',
+    error: {
+      message,
+    },
+  });
+}
+
 async function handleTerminatedSession() {
   try {
     await invokeRequest(new GramJs.users.GetFullUser({
@@ -466,7 +492,11 @@ async function handleTerminatedSession() {
       shouldThrow: true,
     });
   } catch (err: any) {
-    if (err.errorMessage === 'AUTH_KEY_UNREGISTERED' || err.errorMessage === 'SESSION_REVOKED') {
+    if (
+      err.errorMessage === 'AUTH_KEY_UNREGISTERED'
+      || err.errorMessage === 'SESSION_REVOKED'
+      || err.errorMessage === 'USER_DEACTIVATED'
+    ) {
       sendApiUpdate({
         '@type': 'updateConnectionState',
         connectionState: 'connectionStateBroken',
@@ -481,7 +511,6 @@ export async function repairFileReference({
   url: string;
 }) {
   const parsed = parseMediaUrl(url);
-
   if (!parsed) return undefined;
 
   const {
@@ -513,12 +542,12 @@ export async function repairFileReference({
 
 async function repairMessageMedia(peerId: string, messageId: number) {
   const type = getEntityTypeById(peerId);
-  const peer = buildInputPeerFromLocalDb(peerId);
-  if (!peer) return false;
+  const inputChannel = buildInputChannelFromLocalDb(peerId);
+  if (!inputChannel) return false;
   const result = await invokeRequest(
     type === 'channel'
       ? new GramJs.channels.GetMessages({
-        channel: peer,
+        channel: inputChannel,
         id: [new GramJs.InputMessageID({ id: messageId })],
       })
       : new GramJs.messages.GetMessages({
@@ -531,7 +560,7 @@ async function repairMessageMedia(peerId: string, messageId: number) {
 
   if (!result || result instanceof GramJs.messages.MessagesNotModified) return false;
 
-  if (peer && 'pts' in result) {
+  if (inputChannel && 'pts' in result) {
     updateChannelState(peerId, result.pts);
   }
 

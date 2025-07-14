@@ -1,5 +1,5 @@
 import type { FC } from '../../lib/teact/teact';
-import React, {
+import {
   memo, useCallback, useEffect, useMemo, useState,
 } from '../../lib/teact/teact';
 import { getActions } from '../../global';
@@ -31,7 +31,7 @@ type OwnProps = {
   onEditUsername: (username: string) => void;
 };
 
-const USERNAME_HEIGHT_PX = 60;
+const USERNAME_HEIGHT_PX = 56;
 
 const ManageUsernames: FC<OwnProps> = ({
   chatId,
@@ -170,7 +170,7 @@ const ManageUsernames: FC<OwnProps> = ({
               >
                 <ListItem
                   key={usernameData.username}
-                  className={buildClassName('drag-item mb-2 no-icon', styles.item)}
+                  className={buildClassName('drag-item no-icon', styles.item)}
                   narrow
                   secondaryIcon="more"
                   icon={usernameData.isActive ? 'link' : 'link-broken'}
@@ -184,12 +184,15 @@ const ManageUsernames: FC<OwnProps> = ({
                       icon: 'copy',
                     },
                   ]}
-                  // eslint-disable-next-line react/jsx-no-bind
+
                   onClick={() => {
                     handleUsernameClick(usernameData);
                   }}
                 >
-                  <span className="title">@{usernameData.username}</span>
+                  <span className="title">
+                    @
+                    {usernameData.username}
+                  </span>
                   <span className="subtitle">{lang(subtitle)}</span>
                 </ListItem>
               </Draggable>

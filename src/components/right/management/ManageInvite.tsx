@@ -1,6 +1,6 @@
 import type { ChangeEvent } from 'react';
 import type { FC } from '../../../lib/teact/teact';
-import React, { memo, useCallback, useState } from '../../../lib/teact/teact';
+import { memo, useCallback, useState } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiExportedInvite } from '../../../api/types';
@@ -158,7 +158,7 @@ const ManageInvite: FC<OwnProps & StateProps> = ({
 
   return (
     <div className="Management ManageInvite">
-      <div className="custom-scroll">
+      <div className="panel-content custom-scroll">
         <div className="section">
           <Checkbox
             label={lang('ApproveNewMembers')}
@@ -177,7 +177,7 @@ const ManageInvite: FC<OwnProps & StateProps> = ({
           <p className="section-help hint">{lang('LinkNameHelp')}</p>
         </div>
         <div className="section">
-          <div className="section-header">{lang('LimitByPeriod')}</div>
+          <div className="section-heading">{lang('LimitByPeriod')}</div>
           <RadioGroup
             name="expireOptions"
             options={[
@@ -207,14 +207,16 @@ const ManageInvite: FC<OwnProps & StateProps> = ({
           />
           {selectedExpireOption === 'custom' && (
             <Button className="expire-limit" isText onClick={openCalendar}>
-              {formatFullDate(lang, customExpireDate)} {formatTime(lang, customExpireDate)}
+              {formatFullDate(lang, customExpireDate)}
+              {' '}
+              {formatTime(lang, customExpireDate)}
             </Button>
           )}
           <p className="section-help hint">{lang('TimeLimitHelp')}</p>
         </div>
         {!isRequestNeeded && (
           <div className="section">
-            <div className="section-header">{lang('LimitNumberOfUses')}</div>
+            <div className="section-heading">{lang('LimitNumberOfUses')}</div>
             <RadioGroup
               name="usageOptions"
               options={[

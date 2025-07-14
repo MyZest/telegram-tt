@@ -1,17 +1,17 @@
 import { useMemo } from '../lib/teact/teact';
 import { getActions } from '../global';
 
+import type { ApiChat, ApiTopic, ApiUser } from '../api/types';
 import type { MenuItemContextAction } from '../components/ui/ListItem';
-import { type ApiChat, type ApiUser } from '../api/types';
 
 import { SERVICE_NOTIFICATIONS_USER_ID } from '../config';
 import {
   getCanDeleteChat, isChatArchived, isChatChannel, isChatGroup,
-  isUserId,
 } from '../global/helpers';
+import { IS_ELECTRON, IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../util/browser/windowEnvironment';
+import { isUserId } from '../util/entities/ids';
 import { compact } from '../util/iteratees';
-import { IS_ELECTRON, IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../util/windowEnvironment';
-import useOldLang from './useOldLang';
+import useLang from './useLang';
 
 const useChatContextActions = ({
   chat,
@@ -23,6 +23,7 @@ const useChatContextActions = ({
   isSavedDialog,
   currentUserId,
   isPreview,
+  topics,
   handleDelete,
   handleMute,
   handleChatFolderChange,
@@ -37,12 +38,13 @@ const useChatContextActions = ({
   isSavedDialog?: boolean;
   currentUserId?: string;
   isPreview?: boolean;
+  topics?: Record<number, ApiTopic>;
   handleDelete?: NoneToVoidFunction;
   handleMute?: NoneToVoidFunction;
   handleChatFolderChange: NoneToVoidFunction;
   handleReport?: NoneToVoidFunction;
 }, isInSearch = false) => {
-  const lang = useOldLang();
+  const lang = useLang();
 
   const { isSelf } = user || {};
   const isServiceNotifications = user?.id === SERVICE_NOTIFICATIONS_USER_ID;
@@ -55,7 +57,7 @@ const useChatContextActions = ({
     }
 
     if (isUserId(chat.id)) {
-      return lang('DeleteChatUser');
+      return lang('DeleteChat');
     }
 
     if (getCanDeleteChat(chat)) {
@@ -63,10 +65,10 @@ const useChatContextActions = ({
     }
 
     if (isChatChannel(chat)) {
-      return lang('LeaveChannel');
+      return lang('ChannelLeave');
     }
 
-    return lang('Group.LeaveGroup');
+    return lang('GroupLeaveGroup');
   }, [chat, isSavedDialog, lang]);
 
   return useMemo(() => {
@@ -79,12 +81,13 @@ const useChatContextActions = ({
       toggleSavedDialogPinned,
       updateChatMutedState,
       toggleChatArchived,
-      toggleChatUnread,
+      markChatMessagesRead,
+      markChatUnread,
       openChatInNewTab,
     } = getActions();
 
     const actionOpenInNewTab = IS_OPEN_IN_NEW_TAB_SUPPORTED && {
-      title: IS_ELECTRON ? 'Open in new window' : 'Open in new tab',
+      title: IS_ELECTRON ? lang('ChatListOpenInNewWindow') : lang('ChatListOpenInNewTab'),
       icon: 'open-in-new-tab',
       handler: () => {
         if (isSavedDialog) {
@@ -105,12 +108,12 @@ const useChatContextActions = ({
 
     const actionPin = isPinned
       ? {
-        title: lang('UnpinFromTop'),
+        title: lang('ChatListUnpinFromTop'),
         icon: 'unpin',
         handler: togglePinned,
       }
       : {
-        title: lang('PinToTop'),
+        title: lang('ChatListPinToTop'),
         icon: 'pin',
         handler: togglePinned,
       };
@@ -127,19 +130,19 @@ const useChatContextActions = ({
     }
 
     const actionAddToFolder = canChangeFolder ? {
-      title: lang('ChatList.Filter.AddToFolder'),
+      title: lang('ChatListContextAddToFolder'),
       icon: 'folder',
       handler: handleChatFolderChange,
     } : undefined;
 
     const actionMute = isMuted
       ? {
-        title: lang('ChatList.Unmute'),
+        title: lang('ChatsUnmute'),
         icon: 'unmute',
         handler: () => updateChatMutedState({ chatId: chat.id, isMuted: false }),
       }
       : {
-        title: `${lang('ChatList.Mute')}...`,
+        title: `${lang('ChatsMute')}...`,
         icon: 'mute',
         handler: handleMute,
       };
@@ -148,11 +151,15 @@ const useChatContextActions = ({
       return compact([actionOpenInNewTab, actionPin, actionAddToFolder, actionMute]) as MenuItemContextAction[];
     }
 
-    const actionMaskAsRead = (chat.unreadCount || chat.hasUnreadMark)
-      ? { title: lang('MarkAsRead'), icon: 'readchats', handler: () => toggleChatUnread({ id: chat.id }) }
-      : undefined;
+    const actionMaskAsRead = (
+      chat.unreadCount || chat.hasUnreadMark || Object.values(topics || {}).some(({ unreadCount }) => unreadCount)
+    ) ? {
+        title: lang('ChatListContextMaskAsRead'),
+        icon: 'readchats',
+        handler: () => markChatMessagesRead({ id: chat.id }),
+      } : undefined;
     const actionMarkAsUnread = !(chat.unreadCount || chat.hasUnreadMark) && !chat.isForum
-      ? { title: lang('MarkAsUnread'), icon: 'unread', handler: () => toggleChatUnread({ id: chat.id }) }
+      ? { title: lang('ChatListContextMaskAsUnread'), icon: 'unread', handler: () => markChatUnread({ id: chat.id }) }
       : undefined;
 
     const actionArchive = isChatArchived(chat)
@@ -161,7 +168,7 @@ const useChatContextActions = ({
 
     const canReport = handleReport && !user && (isChatChannel(chat) || isChatGroup(chat));
     const actionReport = canReport
-      ? { title: lang('ReportPeer.Report'), icon: 'flag', handler: handleReport }
+      ? { title: lang('ReportPeerReport'), icon: 'flag', handler: handleReport }
       : undefined;
 
     const isInFolder = folderId !== undefined;
@@ -180,7 +187,7 @@ const useChatContextActions = ({
   }, [
     chat, user, canChangeFolder, lang, handleChatFolderChange, isPinned, isInSearch, isMuted, currentUserId,
     handleDelete, handleMute, handleReport, folderId, isSelf, isServiceNotifications, isSavedDialog, deleteTitle,
-    isPreview,
+    isPreview, topics,
   ]);
 };
 

@@ -1,8 +1,8 @@
-import React, { memo } from '../../../lib/teact/teact';
+import { memo } from '../../../lib/teact/teact';
 
 import type { ApiChat, ApiMessage, ApiPeer } from '../../../api/types';
 
-import { getMessageSenderName } from '../../../global/helpers';
+import { getMessageSenderName } from '../../../global/helpers/peers';
 import buildClassName from '../../../util/buildClassName';
 import renderText from '../../common/helpers/renderText';
 
@@ -44,7 +44,7 @@ const MiddleSearchResult = ({
 
   const peer = shouldShowChat ? messageChat : senderPeer;
 
-  const senderName = shouldShowChat ? getMessageSenderName(lang, message.chatId, senderPeer) : undefined;
+  const senderName = shouldShowChat && senderPeer ? getMessageSenderName(lang, message.chatId, senderPeer) : undefined;
 
   const handleClick = useLastCallback(() => {
     onClick(message);

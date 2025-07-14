@@ -21,6 +21,22 @@ export function getRequestInputInvoice<T extends GlobalState>(
 ): ApiRequestInputInvoice | undefined {
   if (inputInvoice.type === 'slug') return inputInvoice;
 
+  if (inputInvoice.type === 'stargiftResale') {
+    const {
+      slug,
+      peerId,
+    } = inputInvoice;
+    const peer = selectPeer(global, peerId);
+
+    if (!peer) return undefined;
+
+    return {
+      type: 'stargiftResale',
+      slug,
+      peer,
+    };
+  }
+
   if (inputInvoice.type === 'stargift') {
     const {
       peerId, shouldHideName, giftId, message, shouldUpgrade,
@@ -93,6 +109,22 @@ export function getRequestInputInvoice<T extends GlobalState>(
       type: 'message',
       chat,
       messageId: inputInvoice.messageId,
+    };
+  }
+
+  if (inputInvoice.type === 'premiumGiftStars') {
+    const {
+      months, userId, message,
+    } = inputInvoice;
+    const user = selectUser(global, userId);
+
+    if (!user) return undefined;
+
+    return {
+      type: 'premiumGiftStars',
+      months,
+      message,
+      user,
     };
   }
 

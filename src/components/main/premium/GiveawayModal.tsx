@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react';
 import type { FC } from '../../../lib/teact/teact';
-import React, {
+import type React from '../../../lib/teact/teact';
+import {
   memo, useEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
@@ -20,6 +21,7 @@ import {
   GIVEAWAY_MAX_ADDITIONAL_CHANNELS,
   GIVEAWAY_MAX_ADDITIONAL_COUNTRIES,
   GIVEAWAY_MAX_ADDITIONAL_USERS,
+  STARS_CURRENCY_CODE,
 } from '../../../config';
 import { getUserFullName, isChatChannel } from '../../../global/helpers';
 import {
@@ -102,7 +104,7 @@ const DEFAULT_CUSTOM_EXPIRE_DATE = 86400 * 3 * 1000; // 3 days
 const MAX_ADDITIONAL_CHANNELS = 9;
 const DEFAULT_BOOST_COUNT = 5;
 
-const GIVEAWAY_IMG_LIST: { [key: number]: string } = {
+const GIVEAWAY_IMG_LIST: Partial<Record<number, string>> = {
   3: GiftGreenRound,
   6: GiftBlueRound,
   12: GiftRedRound,
@@ -123,8 +125,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
   isStarsGiftEnabled,
   starsGiftOptions,
 }) => {
-  // eslint-disable-next-line no-null/no-null
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>();
   const {
     closeGiveawayModal, openInvoice, openPremiumModal,
     launchPrepaidGiveaway, launchPrepaidStarsGiveaway,
@@ -181,7 +182,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
   const isPremiumGiveaway = selectedGiveawayOption === 'premium_giveaway';
   const isStarsGiveaway = selectedGiveawayOption === 'stars_giveaway';
   const selectedUserCount = isPremiumGiveaway
-  && !selectedUserIds.length ? selectedRandomUserCount : selectedUserIds.length;
+    && !selectedUserIds.length ? selectedRandomUserCount : selectedUserIds.length;
   const boostQuantity = selectedUserCount * giveawayBoostPerPremiumLimit;
   const boostStarsQuantity = selectedStarOption?.yearlyBoosts;
 
@@ -217,7 +218,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
   }, [dataStarsPrepaidGiveaway, starsGiftOptions, isStarsPrepaidGiveaway]);
 
   const filteredGifts = useMemo(() => {
-    return gifts?.filter((gift) => gift.users === selectedUserCount);
+    return gifts?.filter((gift) => gift.users === selectedUserCount && gift.currency !== STARS_CURRENCY_CODE);
   }, [gifts, selectedUserCount]);
 
   const fullMonthlyAmount = useMemo(() => {
@@ -229,7 +230,8 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
   }, [filteredGifts]);
 
   const userCountOptions = useMemo(() => {
-    return unique((gifts?.map((winner) => winner.users) || [])).sort((a, b) => a - b);
+    return unique((gifts?.filter((gift) => gift.currency !== STARS_CURRENCY_CODE)
+      ?.map((winner) => winner.users) || [])).sort((a, b) => a - b);
   }, [gifts]);
 
   const winnerCountOptions = useMemo(() => {
@@ -488,7 +490,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
             isGiveaway
             key={gift.months}
             option={gift}
-            fullMonthlyAmount={fullMonthlyAmount!}
+            fullMonthlyAmount={fullMonthlyAmount}
             checked={gift.months === selectedMonthOption}
             onChange={setSelectedMonthOption}
           />
@@ -556,7 +558,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
                 ripple
                 key={channelId}
                 className="chat-item-clickable contact-list-item"
-                /* eslint-disable-next-line react/jsx-no-bind */
+
                 onClick={() => deleteParticipantsHandler(channelId)}
                 rightElement={(<Icon name="close" className={styles.removeChannel} />)}
               >
@@ -691,7 +693,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
       dialogRef={dialogRef}
       onEnter={(dataPrepaidGiveaway || dataStarsPrepaidGiveaway) ? openConfirmModal : handleClick}
     >
-      <div className={styles.main} onScroll={handleScroll}>
+      <div className={buildClassName(styles.main, 'custom-scroll')} onScroll={handleScroll}>
         <Button
           round
           size="smaller"
@@ -720,7 +722,11 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
               {dataStarsPrepaidGiveaway ? (
                 <img className={styles.prepaidImg} src={GiftStar} alt="" />
               ) : (
-                <img className={styles.prepaidImg} src={GIVEAWAY_IMG_LIST[dataPrepaidGiveaway!.months]} alt="" />
+                <img
+                  className={styles.prepaidImg}
+                  src={GIVEAWAY_IMG_LIST[dataPrepaidGiveaway!.months] || GIVEAWAY_IMG_LIST[3]}
+                  alt=""
+                />
               )}
             </div>
             <div className={styles.info}>

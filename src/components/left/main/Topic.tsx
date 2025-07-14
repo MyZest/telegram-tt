@@ -1,5 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, { memo } from '../../../lib/teact/teact';
+import { memo } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type {
@@ -10,6 +10,7 @@ import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { ChatAnimationTypes } from './hooks';
 
 import { groupStatefulContent } from '../../../global/helpers';
+import { getIsChatMuted } from '../../../global/helpers/notifications';
 import {
   selectCanAnimateInterface,
   selectCanDeleteTopic,
@@ -17,6 +18,8 @@ import {
   selectChatMessage,
   selectCurrentMessageList,
   selectDraft,
+  selectNotifyDefaults,
+  selectNotifyException,
   selectOutgoingStatus,
   selectPeerStory,
   selectSender,
@@ -24,9 +27,9 @@ import {
   selectThreadParam,
   selectTopics,
 } from '../../../global/selectors';
+import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import { createLocationHash } from '../../../util/routing';
-import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../../../util/windowEnvironment';
 import renderText from '../../common/helpers/renderText';
 
 import useFlag from '../../../hooks/useFlag';
@@ -57,6 +60,7 @@ type OwnProps = {
 
 type StateProps = {
   chat: ApiChat;
+  isChatMuted?: boolean;
   canDelete?: boolean;
   lastMessage?: ApiMessage;
   lastMessageStory?: ApiTypeStory;
@@ -75,6 +79,7 @@ const Topic: FC<OwnProps & StateProps> = ({
   isSelected,
   chatId,
   chat,
+  isChatMuted,
   style,
   lastMessage,
   lastMessageStory,
@@ -106,9 +111,9 @@ const Topic: FC<OwnProps & StateProps> = ({
   const [shouldRenderMuteModal, markRenderMuteModal, unmarkRenderMuteModal] = useFlag();
 
   const {
-    isPinned, isClosed,
+    isPinned, isClosed, notifySettings,
   } = topic;
-  const isMuted = topic.isMuted || (topic.isMuted === undefined && chat.isMuted);
+  const isMuted = Boolean(notifySettings.mutedUntil || (notifySettings.mutedUntil === undefined && isChatMuted));
 
   const handleOpenDeleteModal = useLastCallback(() => {
     markRenderDeleteModal();
@@ -154,6 +159,7 @@ const Topic: FC<OwnProps & StateProps> = ({
   const contextActions = useTopicContextActions({
     topic,
     chat,
+    isChatMuted,
     wasOpened: wasTopicOpened,
     canDelete,
     handleDelete: handleOpenDeleteModal,
@@ -181,7 +187,7 @@ const Topic: FC<OwnProps & StateProps> = ({
             <TopicIcon topic={topic} className={styles.topicIcon} observeIntersection={observeIntersection} />
             <h3 dir="auto" className="fullName">{renderText(topic.title)}</h3>
           </div>
-          {topic.isMuted && <Icon name="muted" />}
+          {Boolean(notifySettings.mutedUntil) && <Icon name="muted" />}
           <div className="separator" />
           {isClosed && (
             <Icon name="lock-badge" className={styles.closedIcon} />
@@ -247,11 +253,16 @@ export default memo(withGlobal<OwnProps>(
     const storyData = lastMessage?.content.storyData;
     const lastMessageStory = storyData && selectPeerStory(global, storyData.peerId, storyData.id);
 
+    const isChatMuted = chat && getIsChatMuted(
+      chat, selectNotifyDefaults(global), selectNotifyException(global, chat.id),
+    );
+
     return {
       chat,
       lastMessage,
       lastMessageSender,
       typingStatus,
+      isChatMuted,
       canDelete: selectCanDeleteTopic(global, chatId, topic.id),
       withInterfaceAnimations: selectCanAnimateInterface(global),
       draft,

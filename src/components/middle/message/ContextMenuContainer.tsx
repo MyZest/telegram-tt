@@ -1,5 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, {
+import {
   memo, useEffect, useMemo, useState,
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
@@ -25,6 +25,9 @@ import type {
 } from '../../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
+import {
+  TODO_ITEMS_LIMIT,
+} from '../../../config';
 import { PREVIEW_AVATAR_COUNT, SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
 import {
   areReactionsEmpty,
@@ -39,7 +42,6 @@ import {
   isChatGroup,
   isMessageLocal,
   isOwnMessage,
-  isUserId,
   isUserRightBanned,
 } from '../../../global/helpers';
 import {
@@ -66,6 +68,7 @@ import {
   selectPollFromMessage,
   selectRequestedChatTranslationLanguage,
   selectRequestedMessageTranslationLanguage,
+  selectSavedDialogIdFromMessage,
   selectStickerSet,
   selectThreadInfo,
   selectTopic,
@@ -74,10 +77,12 @@ import {
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import { copyTextToClipboard } from '../../../util/clipboard';
+import { isUserId } from '../../../util/entities/ids';
 import { getSelectionAsFormattedText } from './helpers/getSelectionAsFormattedText';
 import { isSelectionRangeInsideMessage } from './helpers/isSelectionRangeInsideMessage';
 
 import useFlag from '../../../hooks/useFlag';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 import useSchedule from '../../../hooks/useSchedule';
@@ -124,6 +129,7 @@ type StateProps = {
   canDelete?: boolean;
   canReport?: boolean;
   canEdit?: boolean;
+  canAppendTodoList?: boolean;
   canForward?: boolean;
   canFaveSticker?: boolean;
   canUnfaveSticker?: boolean;
@@ -156,9 +162,11 @@ type StateProps = {
   isWithPaidReaction?: boolean;
   userFullName?: string;
   canGift?: boolean;
+  savedDialogId?: string;
 };
 
 const selection = window.getSelection();
+const UNQUOTABLE_OFFSET = -1;
 
 const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   threadId,
@@ -189,6 +197,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   canReport,
   canShowReactionList,
   canEdit,
+  canAppendTodoList,
   enabledReactions,
   reactionsLimit,
   isPrivate,
@@ -222,6 +231,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   userFullName,
   canGift,
   className,
+  savedDialogId,
   onClose,
   onCloseAnimationEnd,
 }) => {
@@ -261,9 +271,12 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     addLocalPaidReaction,
     openPaidReactionModal,
     reportMessages,
+    openTodoListModal,
+    showNotification,
   } = getActions();
 
-  const lang = useOldLang();
+  const oldLang = useOldLang();
+  const lang = useLang();
   const { ref: containerRef } = useShowTransition({
     isOpen,
     onCloseAnimationEnd,
@@ -272,7 +285,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isClosePollDialogOpen, openClosePollDialog, closeClosePollDialog] = useFlag();
-  const [canQuoteSelection, setCanQuoteSelection] = useState(false);
+  const [selectionQuoteOffset, setSelectionQuoteOffset] = useState(UNQUOTABLE_OFFSET);
   const [requestCalendar, calendar] = useSchedule(canScheduleUntilOnline, onClose, message.date);
 
   // `undefined` indicates that emoji are present and loading
@@ -349,7 +362,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
 
   useEffect(() => {
     if (isMessageTranslated) {
-      setCanQuoteSelection(false);
+      setSelectionQuoteOffset(UNQUOTABLE_OFFSET);
       return;
     }
 
@@ -359,18 +372,22 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
       && isSelectionRangeInsideMessage(selectionRange);
 
     if (!isMessageTextSelected) {
-      setCanQuoteSelection(false);
+      setSelectionQuoteOffset(UNQUOTABLE_OFFSET);
       return;
     }
 
     const selectionText = getSelectionAsFormattedText(selectionRange);
 
-    const messageText = message.content.text!.text!.replace(/\u00A0/g, ' ');
+    const messageText = message.content.text!.text.replace(/\u00A0/g, ' ');
 
-    setCanQuoteSelection(
-      selectionText.text.trim().length > 0
-      && messageText.includes(selectionText.text),
-    );
+    const canQuote = selectionText.text.trim().length > 0
+      && messageText.includes(selectionText.text);
+    if (!canQuote) {
+      setSelectionQuoteOffset(UNQUOTABLE_OFFSET);
+      return;
+    }
+
+    setSelectionQuoteOffset(selectionRange.startOffset);
   }, [
     selectionRange, selectionRange?.collapsed, selectionRange?.startOffset, selectionRange?.endOffset,
     isMessageTranslated, message.content.text,
@@ -400,13 +417,18 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   });
 
   const handleReply = useLastCallback(() => {
-    const quoteText = canQuoteSelection && selectionRange ? getSelectionAsFormattedText(selectionRange) : undefined;
+    const quoteText = selectionQuoteOffset !== UNQUOTABLE_OFFSET && selectionRange
+      ? getSelectionAsFormattedText(selectionRange) : undefined;
     if (!canReplyInChat) {
-      openReplyMenu({ fromChatId: message.chatId, messageId: message.id, quoteText });
+      openReplyMenu({
+        fromChatId: message.chatId, messageId: message.id, quoteText, quoteOffset: selectionQuoteOffset,
+      });
     } else {
       updateDraftReplyInfo({
         replyToMsgId: message.id,
         quoteText,
+        quoteOffset: selectionQuoteOffset,
+        monoforumPeerId: savedDialogId,
         replyToPeerId: undefined,
       });
     }
@@ -422,7 +444,34 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   });
 
   const handleEdit = useLastCallback(() => {
-    setEditingId({ messageId: message.id });
+    if (message.content.todo) {
+      openTodoListModal({
+        chatId: message.chatId,
+        messageId: message.id,
+      });
+    } else {
+      setEditingId({ messageId: message.id });
+    }
+    closeMenu();
+  });
+
+  const handleAppendTodoList = useLastCallback(() => {
+    if (!isCurrentUserPremium) {
+      showNotification({
+        message: lang('SubscribeToTelegramPremiumForAppendToDo'),
+        action: {
+          action: 'openPremiumModal',
+          payload: { initialSection: 'todo' },
+        },
+        actionText: oldLang('PremiumMore'),
+      });
+    } else {
+      openTodoListModal({
+        chatId: message.chatId,
+        messageId: message.id,
+        forNewTask: true,
+      });
+    }
     closeMenu();
   });
 
@@ -647,13 +696,14 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         canSendNow={canSendNow}
         canReschedule={canReschedule}
         canReply={canReply}
-        canQuote={canQuoteSelection}
+        canQuote={selectionQuoteOffset !== UNQUOTABLE_OFFSET}
         canDelete={canDelete}
         canPin={canPin}
         canReport={canReport}
         repliesThreadInfo={repliesThreadInfo}
         canUnpin={canUnpin}
         canEdit={canEdit}
+        canAppendTodoList={canAppendTodoList}
         canForward={canForward}
         canFaveSticker={canFaveSticker}
         canUnfaveSticker={canUnfaveSticker}
@@ -682,6 +732,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         onOpenThread={handleOpenThread}
         onReply={handleReply}
         onEdit={handleEdit}
+        onAppendTodoList={handleAppendTodoList}
         onPin={handlePin}
         onUnpin={handleUnpin}
         onForward={handleForward}
@@ -721,8 +772,8 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
       <ConfirmDialog
         isOpen={isClosePollDialogOpen}
         onClose={closeClosePollDialog}
-        text={lang('lng_polls_stop_warning')}
-        confirmLabel={lang('lng_polls_stop_sure')}
+        text={oldLang('lng_polls_stop_warning')}
+        confirmLabel={oldLang('lng_polls_stop_sure')}
         confirmHandler={handlePollClose}
       />
       {canReschedule && calendar}
@@ -798,12 +849,13 @@ export default memo(withGlobal<OwnProps>(
     const canSendText = chat && !isUserRightBanned(chat, 'sendPlain', chatFullInfo);
 
     const canReplyInChat = chat && threadId ? getCanPostInChat(chat, topic, isMessageThread, chatFullInfo)
-     && canSendText : false;
+      && canSendText : false;
 
     const isLocal = isMessageLocal(message);
     const hasTtl = hasMessageTtl(message);
     const canShowSeenBy = Boolean(!isLocal
       && chat
+      && !chat.isMonoforum
       && !isMessageUnread
       && seenByMaxChatMembers
       && seenByExpiresAt
@@ -840,6 +892,11 @@ export default memo(withGlobal<OwnProps>(
 
     const canGift = selectCanGift(global, message.chatId);
 
+    const savedDialogId = selectSavedDialogIdFromMessage(global, message);
+    const todoItemsMax = global.appConfig?.todoItemsMax || TODO_ITEMS_LIMIT;
+    const canAppendTodoList = message.content.todo?.todo.othersCanAppend
+      && message.content.todo?.todo.items?.length < todoItemsMax;
+
     return {
       threadId,
       chat,
@@ -855,6 +912,7 @@ export default memo(withGlobal<OwnProps>(
       canUnpin: !isScheduled && canUnpin,
       canDelete,
       canEdit: !isPinned && canEdit,
+      canAppendTodoList,
       canForward: !isScheduled && canForward,
       canFaveSticker: !isScheduled && canFaveSticker,
       canUnfaveSticker: !isScheduled && canUnfaveSticker,
@@ -895,6 +953,7 @@ export default memo(withGlobal<OwnProps>(
       story,
       userFullName,
       canGift,
+      savedDialogId,
     };
   },
 )(ContextMenuContainer));

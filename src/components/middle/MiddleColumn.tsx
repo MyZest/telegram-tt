@@ -1,4 +1,7 @@
-import React, {
+import type {
+  ElementRef } from '../../lib/teact/teact';
+import type React from '../../lib/teact/teact';
+import {
   memo, useEffect, useMemo,
   useState,
 } from '../../lib/teact/teact';
@@ -35,7 +38,6 @@ import {
   isChatChannel,
   isChatGroup,
   isChatSuperGroup,
-  isUserId,
   isUserRightBanned,
 } from '../../global/helpers';
 import {
@@ -47,29 +49,35 @@ import {
   selectCurrentMiddleSearch,
   selectDraft,
   selectIsChatBotNotStarted,
+  selectIsCurrentUserFrozen,
   selectIsInSelectMode,
+  selectIsMonoforumAdmin,
   selectIsRightColumnShown,
   selectIsUserBlocked,
+  selectPeerPaidMessagesStars,
   selectPinnedIds,
   selectTabState,
   selectTheme,
+  selectThemeValues,
   selectThreadInfo,
   selectTopic,
   selectTopics,
   selectUserFullInfo,
 } from '../../global/selectors';
+import {
+  IS_ANDROID, IS_ELECTRON, IS_IOS, IS_SAFARI, IS_TRANSLATION_SUPPORTED, MASK_IMAGE_DISABLED,
+} from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
-import {
-  IS_ANDROID, IS_ELECTRON, IS_IOS, IS_SAFARI, IS_TRANSLATION_SUPPORTED, MASK_IMAGE_DISABLED,
-} from '../../util/windowEnvironment';
+import { isUserId } from '../../util/entities/ids';
 import calculateMiddleFooterTransforms from './helpers/calculateMiddleFooterTransforms';
 
 import useAppLayout from '../../hooks/useAppLayout';
 import useCustomBackground from '../../hooks/useCustomBackground';
 import useForceUpdate from '../../hooks/useForceUpdate';
 import useHistoryBack from '../../hooks/useHistoryBack';
+import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
 import usePrevDuringAnimation from '../../hooks/usePrevDuringAnimation';
@@ -91,6 +99,7 @@ import ChatLanguageModal from './ChatLanguageModal.async';
 import { DropAreaState } from './composer/DropArea';
 import EmojiInteractionAnimation from './EmojiInteractionAnimation.async';
 import FloatingActionButtons from './FloatingActionButtons';
+import FrozenAccountPlaceholder from './FrozenAccountPlaceholder';
 import MessageList from './MessageList';
 import MessageSelectToolbar from './MessageSelectToolbar.async';
 import MiddleHeader from './MiddleHeader';
@@ -103,7 +112,7 @@ import './MiddleColumn.scss';
 import styles from './MiddleColumn.module.scss';
 
 interface OwnProps {
-  leftColumnRef: React.RefObject<HTMLDivElement>;
+  leftColumnRef: ElementRef<HTMLDivElement>;
   isMobile?: boolean;
 }
 
@@ -138,7 +147,7 @@ type StateProps = {
   shouldSkipHistoryAnimations?: boolean;
   currentTransitionKey: number;
   isChannel?: boolean;
-  areChatSettingsLoaded?: boolean;
+  arePeerSettingsLoaded?: boolean;
   canSubscribe?: boolean;
   canStartBot?: boolean;
   canRestartBot?: boolean;
@@ -153,6 +162,10 @@ type StateProps = {
   canShowOpenChatButton?: boolean;
   isContactRequirePremium?: boolean;
   topics?: Record<number, ApiTopic>;
+  paidMessagesStars?: number;
+  isAccountFrozen?: boolean;
+  freezeAppealChat?: ApiChat;
+  shouldBlockSendInMonoforum?: boolean;
 };
 
 function isImage(item: DataTransferItem) {
@@ -198,7 +211,7 @@ function MiddleColumn({
   shouldSkipHistoryAnimations,
   currentTransitionKey,
   isChannel,
-  areChatSettingsLoaded,
+  arePeerSettingsLoaded,
   canSubscribe,
   canStartBot,
   canRestartBot,
@@ -213,13 +226,17 @@ function MiddleColumn({
   canShowOpenChatButton,
   isContactRequirePremium,
   topics,
+  paidMessagesStars,
+  isAccountFrozen,
+  freezeAppealChat,
+  shouldBlockSendInMonoforum,
 }: OwnProps & StateProps) {
   const {
     openChat,
     openPreviousChat,
     unpinAllMessages,
     loadUser,
-    loadChatSettings,
+    loadPeerSettings,
     exitMessageSelectMode,
     joinChannel,
     sendBotCommand,
@@ -234,7 +251,8 @@ function MiddleColumn({
   const { width: windowWidth } = useWindowSize();
   const { isTablet, isDesktop } = useAppLayout();
 
-  const lang = useOldLang();
+  const oldLang = useOldLang();
+  const lang = useLang();
   const [dropAreaState, setDropAreaState] = useState(DropAreaState.None);
   const [isScrollDownNeeded, setIsScrollDownShown] = useState(false);
   const isScrollDownShown = isScrollDownNeeded && (!isMobile || !hasActiveMiddleSearch);
@@ -339,10 +357,10 @@ function MiddleColumn({
   }, [chatId, isPrivate, loadUser]);
 
   useEffect(() => {
-    if (!areChatSettingsLoaded) {
-      loadChatSettings({ chatId: chatId! });
+    if (!arePeerSettingsLoaded) {
+      loadPeerSettings({ peerId: chatId! });
     }
-  }, [chatId, isPrivate, areChatSettingsLoaded]);
+  }, [chatId, isPrivate, arePeerSettingsLoaded]);
 
   useEffect(() => {
     if (chatId && shouldLoadFullChat && isReady) {
@@ -399,7 +417,8 @@ function MiddleColumn({
     joinChannel({ chatId: chatId! });
     if (renderingShouldSendJoinRequest) {
       showNotification({
-        message: isChannel ? lang('RequestToJoinChannelSentDescription') : lang('RequestToJoinGroupSentDescription'),
+        message: isChannel
+          ? oldLang('RequestToJoinChannelSentDescription') : oldLang('RequestToJoinGroupSentDescription'),
       });
     }
   });
@@ -438,13 +457,17 @@ function MiddleColumn({
   );
 
   const messageSendingRestrictionReason = getMessageSendingRestrictionReason(
-    lang, currentUserBannedRights, defaultBannedRights,
+    oldLang, currentUserBannedRights, defaultBannedRights,
   );
-  const forumComposerPlaceholder = getForumComposerPlaceholder(lang, chat, threadId, topics, Boolean(draftReplyInfo));
+  const forumComposerPlaceholder = getForumComposerPlaceholder(
+    oldLang, chat, threadId, topics, Boolean(draftReplyInfo),
+  );
 
   const composerRestrictionMessage = messageSendingRestrictionReason
-    ?? forumComposerPlaceholder
-    ?? (isContactRequirePremium ? <PremiumRequiredPlaceholder userId={chatId!} /> : undefined);
+    || forumComposerPlaceholder
+    || (shouldBlockSendInMonoforum ? lang('MonoforumComposerPlaceholder') : undefined)
+    || (isContactRequirePremium ? <PremiumRequiredPlaceholder userId={chatId!} /> : undefined)
+    || (isAccountFrozen && freezeAppealChat?.id !== chatId ? <FrozenAccountPlaceholder /> : undefined);
 
   // CSS Variables calculation doesn't work properly with transforms, so we calculate transform values in JS
   const {
@@ -473,7 +496,7 @@ function MiddleColumn({
   const isMessagingDisabled = Boolean(
     !isPinnedMessageList && !isSavedDialog && !renderingCanPost && !renderingCanRestartBot && !renderingCanStartBot
     && !renderingCanSubscribe && composerRestrictionMessage,
-  );
+  ) || (isAccountFrozen && freezeAppealChat?.id !== chatId);
   const withMessageListBottomShift = Boolean(
     renderingCanRestartBot || renderingCanSubscribe || renderingShouldSendJoinRequest || renderingCanStartBot
     || (isPinnedMessageList && canUnpin) || canShowOpenChatButton || renderingCanUnblock,
@@ -551,6 +574,7 @@ function MiddleColumn({
                 onNotchToggle={setIsNotchShown}
                 isReady={isReady}
                 isContactRequirePremium={isContactRequirePremium}
+                paidMessagesStars={paidMessagesStars}
                 withBottomShift={withMessageListBottomShift}
                 withDefaultBg={Boolean(!customBackground && !backgroundColor)}
                 onIntersectPinnedMessage={renderingHandleIntersectPinnedMessage!}
@@ -572,7 +596,7 @@ function MiddleColumn({
                   />
                 )}
                 {isPinnedMessageList && canUnpin && (
-                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -581,12 +605,12 @@ function MiddleColumn({
                       onClick={handleOpenUnpinModal}
                     >
                       <Icon name="unpin" />
-                      <span>{lang('Chat.Pinned.UnpinAll', pinnedMessagesCount, 'i')}</span>
+                      <span>{oldLang('Chat.Pinned.UnpinAll', pinnedMessagesCount, 'i')}</span>
                     </Button>
                   </div>
                 )}
                 {canShowOpenChatButton && (
-                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -594,7 +618,7 @@ function MiddleColumn({
                       className="composer-button open-chat-button"
                       onClick={handleOpenChatFromSaved}
                     >
-                      <span>{lang('SavedOpenChat')}</span>
+                      <span>{oldLang('SavedOpenChat')}</span>
                     </Button>
                   </div>
                 )}
@@ -610,7 +634,7 @@ function MiddleColumn({
                 {(
                   isMobile && (renderingCanSubscribe || (renderingShouldJoinToSend && !renderingShouldSendJoinRequest))
                 ) && (
-                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -618,12 +642,12 @@ function MiddleColumn({
                       className="composer-button join-subscribe-button"
                       onClick={handleSubscribeClick}
                     >
-                      {lang(renderingIsChannel ? 'ProfileJoinChannel' : 'ProfileJoinGroup')}
+                      {oldLang(renderingIsChannel ? 'ProfileJoinChannel' : 'ProfileJoinGroup')}
                     </Button>
                   </div>
                 )}
                 {isMobile && renderingShouldSendJoinRequest && (
-                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -631,12 +655,12 @@ function MiddleColumn({
                       className="composer-button join-subscribe-button"
                       onClick={handleSubscribeClick}
                     >
-                      {lang('ChannelJoinRequest')}
+                      {oldLang('ChannelJoinRequest')}
                     </Button>
                   </div>
                 )}
                 {isMobile && renderingCanStartBot && (
-                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -644,12 +668,12 @@ function MiddleColumn({
                       className="composer-button join-subscribe-button"
                       onClick={handleStartBot}
                     >
-                      {lang('BotStart')}
+                      {oldLang('BotStart')}
                     </Button>
                   </div>
                 )}
                 {isMobile && renderingCanRestartBot && (
-                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -657,12 +681,12 @@ function MiddleColumn({
                       className="composer-button join-subscribe-button"
                       onClick={handleRestartBot}
                     >
-                      {lang('BotRestart')}
+                      {oldLang('BotRestart')}
                     </Button>
                   </div>
                 )}
                 {isMobile && renderingCanUnblock && (
-                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -670,7 +694,7 @@ function MiddleColumn({
                       className="composer-button join-subscribe-button"
                       onClick={handleUnblock}
                     >
-                      {lang('Unblock')}
+                      {oldLang('Unblock')}
                     </Button>
                   </div>
                 )}
@@ -722,7 +746,7 @@ export default memo(withGlobal<OwnProps>(
     const theme = selectTheme(global);
     const {
       isBlurred: isBackgroundBlurred, background: customBackground, backgroundColor, patternColor,
-    } = global.settings.themes[theme] || {};
+    } = selectThemeValues(global, theme) || {};
 
     const {
       messageLists, isLeftColumnShown, activeEmojiInteractions,
@@ -762,6 +786,7 @@ export default memo(withGlobal<OwnProps>(
     const bot = selectBot(global, chatId);
     const pinnedIds = selectPinnedIds(global, chatId, threadId);
     const chatFullInfo = chatId ? selectChatFullInfo(global, chatId) : undefined;
+    const userFullInfo = chatId ? selectUserFullInfo(global, chatId) : undefined;
 
     const threadInfo = selectThreadInfo(global, chatId, threadId);
     const isMessageThread = Boolean(!threadInfo?.isCommentsInfo && threadInfo?.fromChannelId);
@@ -772,7 +797,8 @@ export default memo(withGlobal<OwnProps>(
     const isMainThread = messageListType === 'thread' && threadId === MAIN_THREAD_ID;
     const isChannel = Boolean(chat && isChatChannel(chat));
     const canSubscribe = Boolean(
-      chat && isMainThread && (isChannel || isChatSuperGroup(chat)) && chat.isNotJoined && !chat.joinRequests,
+      chat && isMainThread && (isChannel || isChatSuperGroup(chat)) && chat.isNotJoined && !chat.joinRequests
+      && !chat.isMonoforum,
     );
     const shouldJoinToSend = Boolean(chat?.isNotJoined && chat.isJoinToSend);
     const shouldSendJoinRequest = Boolean(chat?.isNotJoined && chat.isJoinRequest);
@@ -787,6 +813,8 @@ export default memo(withGlobal<OwnProps>(
     const shouldBlockSendInForum = chat?.isForum
       ? threadId === MAIN_THREAD_ID && !draftReplyInfo && (selectTopic(global, chatId, GENERAL_TOPIC_ID)?.isClosed)
       : false;
+    const isMonoforumAdmin = selectIsMonoforumAdmin(global, chatId);
+    const shouldBlockSendInMonoforum = Boolean(chat?.isMonoforum && !draftReplyInfo && isMonoforumAdmin);
     const topics = selectTopics(global, chatId);
 
     const isSavedDialog = getIsSavedDialog(chatId, threadId, global.currentUserId);
@@ -795,11 +823,18 @@ export default memo(withGlobal<OwnProps>(
     const canUnpin = chat && (
       isPrivate || (
         chat?.isCreator || (!isChannel && !isUserRightBanned(chat, 'pinMessages'))
-          || getHasAdminRight(chat, 'pinMessages')
+        || getHasAdminRight(chat, 'pinMessages')
       )
     );
 
-    const isContactRequirePremium = selectUserFullInfo(global, chatId)?.isContactRequirePremium;
+    const userFull = selectUserFullInfo(global, chatId);
+
+    const isContactRequirePremium = userFull?.isContactRequirePremium;
+    const paidMessagesStars = selectPeerPaidMessagesStars(global, chatId);
+    const isAccountFrozen = selectIsCurrentUserFrozen(global);
+    const botFreezeAppealId = global.botFreezeAppealId;
+    const freezeAppealChat = botFreezeAppealId
+      ? selectChat(global, botFreezeAppealId) : undefined;
 
     return {
       ...state,
@@ -809,7 +844,7 @@ export default memo(withGlobal<OwnProps>(
       chat,
       draftReplyInfo,
       isPrivate,
-      areChatSettingsLoaded: Boolean(chat?.settings),
+      arePeerSettingsLoaded: Boolean(userFullInfo?.settings),
       isComments: isMessageThread,
       canPost:
         !isPinnedMessageList
@@ -817,7 +852,9 @@ export default memo(withGlobal<OwnProps>(
         && !isBotNotStarted
         && !(shouldJoinToSend && chat?.isNotJoined)
         && !shouldBlockSendInForum
-        && !isSavedDialog,
+        && !shouldBlockSendInMonoforum
+        && !isSavedDialog
+        && (!isAccountFrozen || freezeAppealChat?.id === chatId),
       isPinnedMessageList,
       currentUserBannedRights: chat?.currentUserBannedRights,
       defaultBannedRights: chat?.defaultBannedRights,
@@ -837,6 +874,10 @@ export default memo(withGlobal<OwnProps>(
       canShowOpenChatButton,
       isContactRequirePremium,
       topics,
+      paidMessagesStars,
+      isAccountFrozen,
+      freezeAppealChat,
+      shouldBlockSendInMonoforum,
     };
   },
 )(MiddleColumn));

@@ -1,5 +1,5 @@
 import type { FC } from '../../lib/teact/teact';
-import React, {
+import {
   memo, useCallback, useEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
@@ -10,12 +10,14 @@ import type { MessageList } from '../../types';
 import { EMOJI_SIZE_MODAL, STICKER_SIZE_MODAL, TME_LINK_PREFIX } from '../../config';
 import { getAllowedAttachmentOptions, getCanPostInChat } from '../../global/helpers';
 import {
+  selectBot,
   selectCanScheduleUntilOnline,
   selectChat,
   selectChatFullInfo,
   selectCurrentMessageList,
   selectIsChatWithSelf,
   selectIsCurrentUserPremium,
+  selectPeerPaidMessagesStars,
   selectShouldSchedule,
   selectStickerSet,
   selectThreadInfo,
@@ -83,10 +85,8 @@ const StickerSetModal: FC<OwnProps & StateProps> = ({
     showNotification,
   } = getActions();
 
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line no-null/no-null
-  const sharedCanvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>();
+  const sharedCanvasRef = useRef<HTMLCanvasElement>();
 
   const lang = useOldLang();
 
@@ -262,26 +262,31 @@ export default memo(withGlobal<OwnProps>(
     const { chatId, threadId } = currentMessageList || {};
     const chat = chatId && selectChat(global, chatId);
     const chatFullInfo = chatId ? selectChatFullInfo(global, chatId) : undefined;
-    const sendOptions = chat ? getAllowedAttachmentOptions(chat, chatFullInfo) : undefined;
+    const chatBot = chatId && selectBot(global, chatId);
+    const isSavedMessages = chatId ? selectIsChatWithSelf(global, chatId) : undefined;
+
+    const sendOptions = chat
+      ? getAllowedAttachmentOptions(chat, chatFullInfo, Boolean(chatBot), isSavedMessages)
+      : undefined;
     const threadInfo = chatId && threadId ? selectThreadInfo(global, chatId, threadId) : undefined;
     const isMessageThread = Boolean(!threadInfo?.isCommentsInfo && threadInfo?.fromChannelId);
     const topic = chatId && threadId ? selectTopic(global, chatId, threadId) : undefined;
     const canSendStickers = Boolean(
       chat && threadId && getCanPostInChat(chat, topic, isMessageThread, chatFullInfo)
-        && sendOptions?.canSendStickers,
+      && sendOptions?.canSendStickers,
     );
-    const isSavedMessages = Boolean(chatId) && selectIsChatWithSelf(global, chatId);
 
     const stickerSetInfo = fromSticker ? fromSticker.stickerSetInfo
       : stickerSetShortName ? { shortName: stickerSetShortName } : undefined;
 
     const stickerSet = stickerSetInfo ? selectStickerSet(global, stickerSetInfo) : undefined;
+    const paidMessagesStars = chatId ? selectPeerPaidMessagesStars(global, chatId) : undefined;
 
     return {
       canScheduleUntilOnline: Boolean(chatId) && selectCanScheduleUntilOnline(global, chatId),
       canSendStickers,
       isSavedMessages,
-      shouldSchedule: selectShouldSchedule(global),
+      shouldSchedule: !paidMessagesStars && selectShouldSchedule(global),
       stickerSet,
       isCurrentUserPremium: selectIsCurrentUserPremium(global),
       shouldUpdateStickerSetOrder: global.settings.byKey.shouldUpdateStickerSetOrder,

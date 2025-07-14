@@ -4,7 +4,8 @@ import type { CallbackAction } from '../../global/types';
 import type { IconName } from '../../types/icons';
 import type { RegularLangFnParameters } from '../../util/localization';
 import type { ApiDocument, ApiPhoto, ApiReaction } from './messages';
-import type { ApiPremiumSection, ApiStarsSubscriptionPricing } from './payments';
+import type { ApiPremiumSection } from './payments';
+import type { ApiStarsSubscriptionPricing } from './stars';
 import type { ApiUser } from './users';
 
 export interface ApiInitialArgs {
@@ -22,6 +23,7 @@ export interface ApiInitialArgs {
   shouldDebugExportedSenders?: boolean;
   langCode: string;
   isTestServerRequested?: boolean;
+  accountIds?: string[];
 }
 
 export interface ApiOnProgress {
@@ -34,6 +36,7 @@ export interface ApiOnProgress {
 }
 
 export interface ApiAttachment {
+  blob: Blob;
   blobUrl: string;
   compressedBlobUrl?: string;
   filename: string;
@@ -60,6 +63,7 @@ export interface ApiAttachment {
 
   uniqueId?: string;
   ttlSeconds?: number;
+  shouldSendInHighQuality?: boolean;
 }
 
 export interface ApiWallpaper {
@@ -101,21 +105,14 @@ export interface ApiWebSession {
 
 export interface ApiSessionData {
   mainDcId: number;
-  keys: Record<number, string | number[]>;
-  hashes: Record<number, string | number[]>;
+  keys: Record<number, string>;
   isTest?: true;
 }
-
-export type ApiNotifyException = {
-  chatId: string;
-  isMuted: boolean;
-  isSilent?: boolean;
-  shouldShowPreviews?: boolean;
-};
 
 export type ApiNotification = {
   localId: string;
   containerSelector?: string;
+  type?: 'paidMessage' | undefined;
   title?: string | RegularLangFnParameters;
   message: TeactNode | RegularLangFnParameters;
   cacheBreaker?: string;
@@ -127,6 +124,7 @@ export type ApiNotification = {
   shouldShowTimer?: boolean;
   icon?: IconName;
   customEmojiIconId?: string;
+  shouldUseCustomIcon?: boolean;
   dismissAction?: CallbackAction;
 };
 
@@ -231,10 +229,15 @@ export interface ApiAppConfig {
   maxPinnedStoriesCount?: number;
   groupTranscribeLevelMin?: number;
   canLimitNewMessagesWithoutPremium?: boolean;
+  starsPaidMessagesAvailable?: boolean;
+  starsPaidMessageCommissionPermille?: number;
+  starsPaidMessageAmountMax?: number;
+  starsUsdWithdrawRateX1000?: number;
   bandwidthPremiumNotifyPeriod?: number;
   bandwidthPremiumUploadSpeedup?: number;
   bandwidthPremiumDownloadSpeedup?: number;
   channelRestrictAdsLevelMin?: number;
+  channelAutoTranslationLevelMin?: number;
   paidReactionMaxAmount?: number;
   isChannelRevenueWithdrawalEnabled?: boolean;
   isStarsGiftEnabled?: boolean;
@@ -242,6 +245,17 @@ export interface ApiAppConfig {
   starGiftMaxConvertPeriod?: number;
   starRefStartPrefixes?: string[];
   tonExplorerUrl?: string;
+  savedGiftPinLimit?: number;
+  freezeSinceDate?: number;
+  freezeUntilDate?: number;
+  freezeAppealUrl?: string;
+  starsStargiftResaleAmountMin?: number;
+  starsStargiftResaleAmountMax?: number;
+  starsStargiftResaleCommissionPermille?: number;
+  pollMaxAnswers?: number;
+  todoItemsMax?: number;
+  todoTitleLengthMax?: number;
+  todoItemLengthMax?: number;
 }
 
 export interface ApiConfig {
@@ -259,13 +273,11 @@ export interface ApiConfig {
 export type ApiPeerColorSet = string[];
 
 export interface ApiPeerColors {
-  general: {
-    [key: number]: {
-      isHidden?: true;
-      colors?: ApiPeerColorSet;
-      darkColors?: ApiPeerColorSet;
-    };
-  };
+  general: Record<number, {
+    isHidden?: true;
+    colors?: ApiPeerColorSet;
+    darkColors?: ApiPeerColorSet;
+  }>;
   generalHash?: number;
 }
 
@@ -343,12 +355,22 @@ export type ApiLimitType =
   | 'chatlistInvites'
   | 'chatlistJoined'
   | 'recommendedChannels'
-  | 'savedDialogsPinned';
+  | 'savedDialogsPinned'
+  | 'moreAccounts';
 
 export type ApiLimitTypeWithModal = Exclude<ApiLimitType, (
-  'captionLength' | 'aboutLength' | 'stickersFaved' | 'savedGifs' | 'recommendedChannels'
+  'captionLength' | 'aboutLength' | 'stickersFaved' | 'savedGifs' | 'recommendedChannels' | 'moreAccounts'
 )>;
 
 export type ApiLimitTypeForPromo = Exclude<ApiLimitType,
 'uploadMaxFileparts' | 'chatlistInvites' | 'chatlistJoined' | 'savedDialogsPinned'
 >;
+
+export type ApiPeerNotifySettings = {
+  mutedUntil?: number;
+  hasSound?: boolean;
+  isSilentPosting?: boolean;
+  shouldShowPreviews?: boolean;
+};
+
+export type ApiNotifyPeerType = 'users' | 'groups' | 'channels';

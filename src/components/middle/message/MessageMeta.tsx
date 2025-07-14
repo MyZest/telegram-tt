@@ -1,5 +1,6 @@
 import type { FC, TeactNode } from '../../../lib/teact/teact';
-import React, { memo, useMemo } from '../../../lib/teact/teact';
+import type React from '../../../lib/teact/teact';
+import { memo, useMemo } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
 import type {
@@ -8,6 +9,7 @@ import type {
 
 import buildClassName from '../../../util/buildClassName';
 import { formatDateTimeToString, formatPastTimeShort, formatTime } from '../../../util/dates/dateFormat';
+import { formatStarsAsIcon } from '../../../util/localization/format';
 import { formatIntegerCompact } from '../../../util/textFormat';
 import renderText from '../../common/helpers/renderText';
 
@@ -38,6 +40,7 @@ type OwnProps = {
   onEffectClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   renderQuickReactionButton?: () => TeactNode | undefined;
   onOpenThread: NoneToVoidFunction;
+  paidMessageStars?: number;
 };
 
 const MessageMeta: FC<OwnProps> = ({
@@ -56,6 +59,7 @@ const MessageMeta: FC<OwnProps> = ({
   onTranslationClick,
   onEffectClick,
   onOpenThread,
+  paidMessageStars,
 }) => {
   const { showNotification } = getActions();
 
@@ -109,10 +113,14 @@ const MessageMeta: FC<OwnProps> = ({
 
   const viewsTitle = useMemo(() => {
     if (!message.viewsCount) return undefined;
-    let text = lang('MessageTooltipViews', { count: message.viewsCount }, { pluralValue: message.viewsCount });
+    let text = lang('MessageTooltipViews', {
+      count: lang.number(message.viewsCount),
+    }, { pluralValue: message.viewsCount });
     if (message.forwardsCount) {
       text += '\n';
-      text += lang('MessageTooltipForwards', { count: message.forwardsCount }, { pluralValue: message.forwardsCount });
+      text += lang('MessageTooltipForwards', {
+        count: lang.number(message.forwardsCount),
+      }, { pluralValue: message.forwardsCount });
     }
 
     return text;
@@ -157,7 +165,7 @@ const MessageMeta: FC<OwnProps> = ({
       {Boolean(message.viewsCount) && (
         <>
           <span className="message-views" title={viewsTitle}>
-            {formatIntegerCompact(message.viewsCount!)}
+            {formatIntegerCompact(lang, message.viewsCount)}
           </span>
           <Icon name="channelviews" />
         </>
@@ -165,7 +173,7 @@ const MessageMeta: FC<OwnProps> = ({
       {!noReplies && Boolean(repliesThreadInfo?.messagesCount) && (
         <span onClick={handleOpenThread} className="message-replies-wrapper" title={repliesTitle}>
           <span className="message-replies">
-            <AnimatedCounter text={formatIntegerCompact(repliesThreadInfo!.messagesCount!)} />
+            <AnimatedCounter text={formatIntegerCompact(lang, repliesThreadInfo.messagesCount)} />
           </span>
           <Icon name="reply-filled" />
         </span>
@@ -175,6 +183,17 @@ const MessageMeta: FC<OwnProps> = ({
       )}
       {signature && (
         <span className="message-signature">{renderText(signature)}</span>
+      )}
+      {Boolean(paidMessageStars) && (
+        <span className="message-price">
+          {
+            formatStarsAsIcon(lang, paidMessageStars, {
+              asFont: true,
+              className: 'message-price-star-icon',
+              containerClassName: 'message-price-stars-container',
+            })
+          }
+        </span>
       )}
       <span className="message-time" title={dateTitle} onMouseEnter={markActivated}>
         {message.forwardInfo?.isImported && (

@@ -1,5 +1,5 @@
 import type { FC } from '../../lib/teact/teact';
-import React, { memo, useMemo } from '../../lib/teact/teact';
+import { memo, useMemo } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import buildClassName from '../../util/buildClassName';
@@ -115,6 +115,7 @@ const InviteLink: FC<OwnProps> = ({
           size="smaller"
           disabled={isDisabled}
           onClick={handleShare}
+          className={styles.share}
         >
           {lang('FolderLinkScreen.LinkActionShare')}
         </Button>

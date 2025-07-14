@@ -1,5 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, {
+import {
   memo, useEffect, useMemo,
   useRef, useState,
 } from '../../../lib/teact/teact';
@@ -11,7 +11,6 @@ import type {
   ApiGroupStatistics,
   ApiMessage,
   ApiTypeStory,
-  StatisticsGraph,
 } from '../../../api/types';
 
 import {
@@ -34,8 +33,8 @@ import StatisticsRecentStory from './StatisticsRecentStory';
 
 import styles from './Statistics.module.scss';
 
-type ILovelyChart = { create: Function };
-let lovelyChartPromise: Promise<ILovelyChart>;
+type ILovelyChart = { create: (el: HTMLElement, params: AnyLiteral) => void };
+let lovelyChartPromise: Promise<ILovelyChart> | undefined;
 let LovelyChart: ILovelyChart;
 
 async function ensureLovelyChart() {
@@ -95,8 +94,7 @@ const Statistics: FC<OwnProps & StateProps> = ({
   storiesById,
 }) => {
   const lang = useOldLang();
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>();
   const [isReady, setIsReady] = useState(false);
   const loadedCharts = useRef<string[]>([]);
 
@@ -167,14 +165,14 @@ const Statistics: FC<OwnProps & StateProps> = ({
         const { zoomToken } = graph;
 
         LovelyChart.create(
-          containerRef.current!.children[index],
+          containerRef.current!.children[index] as HTMLElement,
           {
             title: lang((graphTitles as Record<string, string>)[name]),
             ...zoomToken ? {
               onZoom: (x: number) => callApi('fetchStatisticsAsyncGraph', { token: zoomToken, x, dcId }),
               zoomOutLabel: lang('Graph.ZoomOut'),
             } : {},
-            ...graph as StatisticsGraph,
+            ...graph,
           },
         );
 
@@ -189,17 +187,15 @@ const Statistics: FC<OwnProps & StateProps> = ({
     graphs, graphTitles, isReady, statistics, lang, chatId, loadStatisticsAsyncGraph, dcId, forceUpdate,
   ]);
 
-  if (!isReady || !statistics) {
-    return <Loading />;
-  }
-
   return (
-    <div className={buildClassName(styles.root, 'custom-scroll', isReady && styles.ready)}>
-      <StatisticsOverview
-        statistics={statistics}
-        type={isGroup ? 'group' : 'channel'}
-        title={lang('StatisticOverview')}
-      />
+    <div className={buildClassName(styles.root, 'panel-content custom-scroll', isReady && styles.ready)}>
+      {statistics && (
+        <StatisticsOverview
+          statistics={statistics}
+          type={isGroup ? 'group' : 'channel'}
+          title={lang('StatisticOverview')}
+        />
+      )}
 
       {!loadedCharts.current.length && <Loading />}
 
@@ -209,7 +205,7 @@ const Statistics: FC<OwnProps & StateProps> = ({
         ))}
       </div>
 
-      {Boolean((statistics as ApiChannelStatistics).recentPosts?.length) && (
+      {Boolean((statistics as ApiChannelStatistics)?.recentPosts?.length) && (
         <div className={styles.messages}>
           <h2 className={styles.messagesTitle}>{lang('ChannelStats.Recent.Header')}</h2>
 

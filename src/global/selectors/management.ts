@@ -1,10 +1,11 @@
 import type { GlobalState, TabArgs } from '../types';
 
+import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import {
   getCanAddContact,
   isAnonymousForwardsChat,
-  isChatAdmin, isChatGroup, isUserBot, isUserId,
+  isChatAdmin, isChatGroup, isUserBot,
 } from '../helpers';
 import { selectChat, selectIsChatWithSelf } from './chats';
 import { selectCurrentMessageList } from './messages';
@@ -71,7 +72,7 @@ export function selectCanManage<T extends GlobalState>(
   chatId: string,
 ) {
   const chat = selectChat(global, chatId);
-  if (!chat || chat.isRestricted) return false;
+  if (!chat || chat.isRestricted || chat.isMonoforum) return false;
 
   const isPrivate = isUserId(chat.id);
   const user = isPrivate ? selectUser(global, chatId) : undefined;

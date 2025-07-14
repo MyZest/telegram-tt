@@ -1,23 +1,26 @@
-import React, { memo, useMemo, useRef } from '../../../lib/teact/teact';
+import { memo, useMemo, useRef } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiPeer, ApiSavedStarGift } from '../../../api/types';
+import type { ApiEmojiStatusType, ApiPeer, ApiSavedStarGift } from '../../../api/types';
 
-import { selectPeer } from '../../../global/selectors';
+import { getHasAdminRight } from '../../../global/helpers';
+import { selectChat, selectPeer, selectUser } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import { CUSTOM_PEER_HIDDEN } from '../../../util/objects/customPeer';
 import { formatIntegerCompact } from '../../../util/textFormat';
 import { getGiftAttributes, getStickerFromGift, getTotalGiftAvailability } from '../helpers/gifts';
 
-import useFlag from '../../../hooks/useFlag';
-import { type ObserveFn, useOnIntersect } from '../../../hooks/useIntersectionObserver';
+import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
+import { type ObserveFn } from '../../../hooks/useIntersectionObserver';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
-import AnimatedIconFromSticker from '../AnimatedIconFromSticker';
+import StickerView from '../../common/StickerView';
+import Menu from '../../ui/Menu';
 import Avatar from '../Avatar';
 import Icon from '../icons/Icon';
 import RadialPatternBackground from '../profile/RadialPatternBackground';
+import GiftMenuItems from './GiftMenuItems';
 import GiftRibbon from './GiftRibbon';
 
 import styles from './SavedGift.module.scss';
@@ -25,11 +28,16 @@ import styles from './SavedGift.module.scss';
 type OwnProps = {
   peerId: string;
   gift: ApiSavedStarGift;
+  style?: string;
   observeIntersection?: ObserveFn;
 };
 
 type StateProps = {
   fromPeer?: ApiPeer;
+  currentUserId?: string;
+  hasAdminRights?: boolean;
+  currentUserEmojiStatus?: ApiEmojiStatusType;
+  collectibleEmojiStatuses?: ApiEmojiStatusType[];
 };
 
 const GIFT_STICKER_SIZE = 90;
@@ -37,27 +45,60 @@ const GIFT_STICKER_SIZE = 90;
 const SavedGift = ({
   peerId,
   gift,
+  style,
   fromPeer,
+  currentUserId,
+  hasAdminRights,
+  collectibleEmojiStatuses,
+  currentUserEmojiStatus,
   observeIntersection,
 }: OwnProps & StateProps) => {
   const { openGiftInfoModal } = getActions();
 
-  // eslint-disable-next-line no-null/no-null
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>();
 
-  const [shouldPlay, play] = useFlag();
+  const stickerRef = useRef<HTMLDivElement>();
 
-  const oldLang = useOldLang();
+  const lang = useLang();
+
+  const canManage = peerId === currentUserId || hasAdminRights;
+
+  const totalIssued = getTotalGiftAvailability(gift.gift);
+  const starGift = gift.gift;
+  const starGiftUnique = starGift.type === 'starGiftUnique' ? starGift : undefined;
+  const ribbonText = (() => {
+    if (starGiftUnique?.resellPriceInStars) {
+      return lang('GiftRibbonSale');
+    }
+    if (gift.isPinned && starGiftUnique) {
+      return lang('GiftSavedNumber', { number: starGiftUnique.number });
+    }
+    if (totalIssued) {
+      return lang('ActionStarGiftLimitedRibbon', { total: formatIntegerCompact(lang, totalIssued) });
+    }
+    return undefined;
+  })();
+
+  const ribbonColor = starGiftUnique?.resellPriceInStars ? 'green' : 'blue';
+
+  const {
+    isContextMenuOpen, contextMenuAnchor,
+    handleBeforeContextMenu, handleContextMenu,
+    handleContextMenuClose, handleContextMenuHide,
+  } = useContextMenuHandlers(ref);
+
+  const getTriggerElement = useLastCallback(() => ref.current);
+  const getRootElement = useLastCallback(() => ref.current!.closest('.custom-scroll'));
+  const getMenuElement = useLastCallback(() => (
+    document.querySelector('#portals')?.querySelector('.saved-gift-context-menu .bubble')
+  ));
+  const getLayout = useLastCallback(() => ({ withPortal: true }));
 
   const handleClick = useLastCallback(() => {
     openGiftInfoModal({
       peerId,
       gift,
     });
-  });
-
-  const handleOnIntersect = useLastCallback((entry: IntersectionObserverEntry) => {
-    if (entry.isIntersecting) play();
   });
 
   const avatarPeer = (gift.isNameHidden && !fromPeer) ? CUSTOM_PEER_HIDDEN : fromPeer;
@@ -84,48 +125,92 @@ const SavedGift = ({
     );
   }, [gift.gift]);
 
-  useOnIntersect(ref, observeIntersection, sticker ? handleOnIntersect : undefined);
-
   if (!sticker) return undefined;
-
-  const totalIssued = getTotalGiftAvailability(gift.gift);
 
   return (
     <div
       ref={ref}
       className={buildClassName(styles.root, 'scroll-item')}
+      style={style}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      onMouseDown={handleBeforeContextMenu}
     >
       {radialPatternBackdrop}
-      {!radialPatternBackdrop && <Avatar className={styles.avatar} peer={avatarPeer} size="micro" />}
-      <AnimatedIconFromSticker
-        sticker={sticker}
-        noLoop
-        play={shouldPlay}
-        nonInteractive
-        size={GIFT_STICKER_SIZE}
-      />
+      {!radialPatternBackdrop && <Avatar className={styles.topIcon} peer={avatarPeer} size="micro" />}
+      {gift.isPinned && <Icon name="pinned-message" className={styles.topIcon} />}
+      <div
+        ref={stickerRef}
+        className={styles.stickerWrapper}
+        style={`width: ${GIFT_STICKER_SIZE}px; height: ${GIFT_STICKER_SIZE}px`}
+      >
+        {sticker && (
+          <StickerView
+            observeIntersectionForPlaying={observeIntersection}
+            observeIntersectionForLoading={observeIntersection}
+            containerRef={stickerRef}
+            sticker={sticker}
+            size={GIFT_STICKER_SIZE}
+            shouldPreloadPreview
+          />
+        )}
+
+      </div>
       {gift.isUnsaved && (
         <div className={styles.hiddenGift}>
-          <Icon name="eye-closed-outline" />
+          <Icon name="eye-crossed-outline" />
         </div>
       )}
-      {totalIssued && (
+      {ribbonText && (
         <GiftRibbon
-          color="blue"
-          text={oldLang('Gift2Limited1OfRibbon', formatIntegerCompact(totalIssued))}
+          color={ribbonColor}
+          text={ribbonText}
         />
+      )}
+      {contextMenuAnchor !== undefined && (
+        <Menu
+          isOpen={isContextMenuOpen}
+          anchor={contextMenuAnchor}
+          className="saved-gift-context-menu"
+          autoClose
+          withPortal
+          getMenuElement={getMenuElement}
+          getTriggerElement={getTriggerElement}
+          getRootElement={getRootElement}
+          getLayout={getLayout}
+          onClose={handleContextMenuClose}
+          onCloseAnimationEnd={handleContextMenuHide}
+        >
+          <GiftMenuItems
+            peerId={peerId}
+            gift={gift}
+            canManage={canManage}
+            collectibleEmojiStatuses={collectibleEmojiStatuses}
+            currentUserEmojiStatus={currentUserEmojiStatus}
+          />
+        </Menu>
       )}
     </div>
   );
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { gift }): StateProps => {
+  (global, { peerId, gift }): StateProps => {
     const fromPeer = gift.fromId ? selectPeer(global, gift.fromId) : undefined;
+    const chat = selectChat(global, peerId);
+    const hasAdminRights = chat && getHasAdminRight(chat, 'postMessages');
+
+    const currentUserId = global.currentUserId;
+    const currentUser = currentUserId ? selectUser(global, currentUserId) : undefined;
+    const currentUserEmojiStatus = currentUser?.emojiStatus;
+    const collectibleEmojiStatuses = global.collectibleEmojiStatuses?.statuses;
 
     return {
       fromPeer,
+      hasAdminRights,
+      currentUserId,
+      currentUserEmojiStatus,
+      collectibleEmojiStatuses,
     };
   },
 )(SavedGift));

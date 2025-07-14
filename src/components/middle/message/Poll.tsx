@@ -1,5 +1,6 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, {
+import type React from '../../../lib/teact/teact';
+import {
   memo,
   useEffect,
   useLayoutEffect,
@@ -69,10 +70,8 @@ const Poll: FC<OwnProps> = ({
       ? Math.min(summary.closeDate - getServerTime(), summary.closePeriod!)
       : 0,
   );
-  // eslint-disable-next-line no-null/no-null
-  const countdownRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line no-null/no-null
-  const timerCircleRef = useRef<SVGCircleElement>(null);
+  const countdownRef = useRef<HTMLDivElement>();
+  const timerCircleRef = useRef<SVGCircleElement>();
   const { results: voteResults, totalVoters } = results;
   const hasVoted = voteResults && voteResults.some((r) => r.isChosen);
   const canVote = !summary.closed && !hasVoted;
@@ -270,11 +269,15 @@ const Poll: FC<OwnProps> = ({
         )}
       </div>
       {canVote && (
-        <div className="poll-answers" onClick={stopPropagation}>
+        <div
+          className="poll-answers"
+          onClick={stopPropagation}
+        >
           {isMultiple
             ? (
               <CheckboxGroup
                 options={answers}
+                selected={chosenOptions}
                 onChange={handleCheckboxChange}
                 disabled={message.isScheduled || isSubmitting}
                 loadingOptions={isSubmitting ? chosenOptions : undefined}

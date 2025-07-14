@@ -8,10 +8,12 @@ import type {
   ApiFactCheck,
   ApiInputMessageReplyInfo,
   ApiInputReplyInfo,
+  ApiMediaTodo,
   ApiMessage,
   ApiMessageEntity,
   ApiMessageForwardInfo,
   ApiMessageReportResult,
+  ApiNewMediaTodo,
   ApiNewPoll,
   ApiPeer,
   ApiPhoto,
@@ -60,6 +62,7 @@ import {
   buildApiFormattedText,
   buildApiPhoto,
 } from './common';
+import { type OmitVirtualFields } from './helpers';
 import { buildApiMessageAction } from './messageActions';
 import { buildMessageContent, buildMessageMediaContent, buildMessageTextContent } from './messageContent';
 import { buildApiPeerColor, buildApiPeerId, getApiChatIdFromMtpPeer } from './peers';
@@ -136,7 +139,6 @@ export function buildApiMessageFromShort(mtpMessage: GramJs.UpdateShortMessage):
 
   return buildApiMessageWithChatId(chatId, {
     ...mtpMessage,
-    fromId: buildPeer(mtpMessage.out ? currentUserId : buildApiPeerId(mtpMessage.userId, 'user')),
     peerId: buildPeer(mtpMessage.out ? buildApiPeerId(mtpMessage.userId, 'user') : currentUserId),
   });
 }
@@ -163,13 +165,15 @@ export function buildApiMessageFromNotification(
     chatId: SERVICE_NOTIFICATIONS_USER_ID,
     date: notification.inboxDate || currentDate,
     content,
+    isInvertedMedia: notification.invertMedia,
     isOutgoing: false,
   };
 }
 
+type TypeMessageWithContent = OmitVirtualFields<GramJs.Message> & OmitVirtualFields<GramJs.MessageService>;
 export type UniversalMessage = (
-  Pick<GramJs.Message & GramJs.MessageService, ('id' | 'date' | 'peerId')>
-  & Partial<GramJs.Message & GramJs.MessageService>
+  Pick<TypeMessageWithContent, ('id' | 'date' | 'peerId')>
+  & Partial<TypeMessageWithContent>
 );
 
 export function buildApiMessageWithChatId(
@@ -266,6 +270,7 @@ export function buildApiMessageWithChatId(
     isInvertedMedia,
     isVideoProcessingPending,
     reportDeliveryUntilDate: mtpMessage.reportDeliveryUntilDate,
+    paidMessageStars: mtpMessage.paidMessageStars?.toJSNumber(),
   };
 }
 
@@ -283,7 +288,9 @@ export function buildMessageDraft(draft: GramJs.TypeDraftMessage): ApiDraft | un
     replyToMsgId: replyTo.replyToMsgId,
     replyToTopId: replyTo.topMsgId,
     replyToPeerId: replyTo.replyToPeerId && getApiChatIdFromMtpPeer(replyTo.replyToPeerId),
+    monoforumPeerId: replyTo.monoforumPeerId && getApiChatIdFromMtpPeer(replyTo.monoforumPeerId),
     quoteText: replyTo.quoteText ? buildMessageTextContent(replyTo.quoteText, replyTo.quoteEntities) : undefined,
+    quoteOffset: replyTo.quoteOffset,
   } satisfies ApiInputMessageReplyInfo : undefined;
 
   return {
@@ -338,6 +345,7 @@ function buildApiReplyInfo(
       quote,
       quoteText,
       quoteEntities,
+      quoteOffset,
     } = replyHeader;
 
     return {
@@ -350,6 +358,7 @@ function buildApiReplyInfo(
       replyMedia: replyMedia && buildMessageMediaContent(replyMedia, context),
       isQuote: quote,
       quoteText: quoteText ? buildMessageTextContent(quoteText, quoteEntities) : undefined,
+      quoteOffset,
     };
   }
 
@@ -374,6 +383,13 @@ function buildNewPoll(poll: ApiNewPoll, localId: number): ApiPoll {
   };
 }
 
+function buildNewTodo(todo: ApiNewMediaTodo): ApiMediaTodo {
+  return {
+    mediaType: 'todo',
+    todo: todo.todo,
+  };
+}
+
 export function buildLocalMessage(
   chat: ApiChat,
   lastMessageId?: number,
@@ -384,6 +400,7 @@ export function buildLocalMessage(
   sticker?: ApiSticker,
   gif?: ApiVideo,
   poll?: ApiNewPoll,
+  todo?: ApiNewMediaTodo,
   contact?: ApiContact,
   groupedId?: string,
   scheduledAt?: number,
@@ -391,6 +408,8 @@ export function buildLocalMessage(
   story?: ApiStory | ApiStorySkipped,
   isInvertedMedia?: true,
   effectId?: string,
+  isPending?: true,
+  messagePriceInStars?: number,
 ) {
   const localId = getNextLocalMessageId(lastMessageId);
   const media = attachment && buildUploadingMedia(attachment);
@@ -399,6 +418,7 @@ export function buildLocalMessage(
   const resultReplyInfo = replyInfo && buildReplyInfo(replyInfo, chat.isForum);
 
   const localPoll = poll && buildNewPoll(poll, localId);
+  const localTodo = todo && buildNewTodo(todo);
 
   const formattedText = text ? addTimestampEntities({ text, entities }) : undefined;
 
@@ -413,10 +433,11 @@ export function buildLocalMessage(
       contact,
       storyData: story && { mediaType: 'storyData', ...story },
       pollId: localPoll?.id,
+      todo: localTodo,
     }),
     date: scheduledAt || Math.round(Date.now() / 1000) + getServerTimeOffset(),
     isOutgoing: !isChannel,
-    senderId: sendAs?.id || currentUserId,
+    senderId: chat.type !== 'chatTypePrivate' ? (sendAs?.id || currentUserId) : undefined,
     replyInfo: resultReplyInfo,
     ...(groupedId && {
       groupedId,
@@ -426,11 +447,13 @@ export function buildLocalMessage(
     isForwardingAllowed: true,
     isInvertedMedia,
     effectId,
+    ...(isPending && { sendingState: 'messageSendingStatePending' }),
+    ...(messagePriceInStars && { paidMessageStars: messagePriceInStars }),
   } satisfies ApiMessage;
 
   const emojiOnlyCount = getEmojiOnlyCountForMessage(message.content, message.groupedId);
 
-  const finalMessage = {
+  const finalMessage: ApiMessage = {
     ...message,
     ...(emojiOnlyCount && { emojiOnlyCount }),
   };
@@ -506,7 +529,7 @@ export function buildLocalForwardedMessage({
     content: updatedContent,
     date: scheduledAt || Math.round(Date.now() / 1000) + getServerTimeOffset(),
     isOutgoing: !asIncomingInChatWithSelf && toChat.type !== 'chatTypeChannel',
-    senderId: sendAs?.id || currentUserId,
+    senderId: toChat.type !== 'chatTypePrivate' ? (sendAs?.id || currentUserId) : undefined,
     sendingState: 'messageSendingStatePending',
     groupedId,
     isInAlbum,
@@ -548,6 +571,7 @@ function buildReplyInfo(inputInfo: ApiInputReplyInfo, isForum?: boolean): ApiRep
     replyToTopId: inputInfo.replyToTopId,
     replyToPeerId: inputInfo.replyToPeerId,
     quoteText: inputInfo.quoteText,
+    quoteOffset: inputInfo.quoteOffset,
     isForumTopic: isForum && inputInfo.replyToTopId ? true : undefined,
     ...(Boolean(inputInfo.quoteText) && { isQuote: true }),
   };

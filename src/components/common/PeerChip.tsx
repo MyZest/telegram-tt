@@ -1,13 +1,12 @@
 import type { TeactNode } from '../../lib/teact/teact';
-import React, { memo } from '../../lib/teact/teact';
+import { memo } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
 import type { ApiPeer } from '../../api/types';
 import type { CustomPeer } from '../../types';
 import type { IconName } from '../../types/icons';
 
-import { getPeerTitle } from '../../global/helpers';
-import { isApiPeerChat } from '../../global/helpers/peers';
+import { getPeerTitle, isApiPeerChat } from '../../global/helpers/peers';
 import { selectPeer, selectUser } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
 import { getPeerColorClass } from './helpers/peerColor';
@@ -21,9 +20,9 @@ import Icon from './icons/Icon';
 import styles from './PeerChip.module.scss';
 
 type OwnProps<T = undefined> = {
-  // eslint-disable-next-line react/no-unused-prop-types
+
   peerId?: string;
-  // eslint-disable-next-line react/no-unused-prop-types
+
   forceShowSelf?: boolean;
   customPeer?: CustomPeer;
   mockPeer?: ApiPeer;
@@ -45,7 +44,6 @@ type StateProps = {
   isSavedMessages?: boolean;
 };
 
-// eslint-disable-next-line @typescript-eslint/comma-dangle
 const PeerChip = <T,>({
   icon,
   title,
