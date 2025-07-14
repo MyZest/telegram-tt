@@ -140,11 +140,18 @@ export default function createConfig(
                   exportLocalsConvention: 'camelCase',
                   auto: true,
                   localIdentName: APP_ENV === 'production' ? '[sha1:hash:base64:8]' : '[name]__[local]',
-                },
+                }
               },
             },
             'postcss-loader',
-            'sass-loader',
+            {
+            loader: 'sass-loader', // 处理 Sass 到 CSS
+            options: {
+              sassOptions: {
+                outputStyle: 'expanded', // 输出格式，可选 'expanded' 或 'compressed'
+              }
+            }
+          }
           ],
         },
         {
@@ -195,13 +202,13 @@ export default function createConfig(
         mainIcon: APP_ENV === 'production' ? 'icon-192x192' : 'icon-dev-192x192',
         manifest: APP_ENV === 'production' ? 'site.webmanifest' : 'site_dev.webmanifest',
         baseUrl: BASE_URL,
-        csp: CSP,
+        // csp: CSP,
         template: 'src/index.html',
       }),
       new MiniCssExtractPlugin({
         filename: 'telegram-a.[name].[contenthash].css',
         chunkFilename: 'telegram-a.[name].[chunkhash].css',
-        ignoreOrder: true,
+        ignoreOrder: false,
       }),
       new EnvironmentPlugin({
         APP_ENV,
