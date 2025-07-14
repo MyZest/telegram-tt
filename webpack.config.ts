@@ -144,14 +144,7 @@ export default function createConfig(
               },
             },
             'postcss-loader',
-            {
-            loader: 'sass-loader', // 处理 Sass 到 CSS
-            options: {
-              sassOptions: {
-                outputStyle: 'expanded', // 输出格式，可选 'expanded' 或 'compressed'
-              }
-            }
-          }
+            'sass-loader',
           ],
         },
         {
@@ -208,7 +201,7 @@ export default function createConfig(
       new MiniCssExtractPlugin({
         filename: 'telegram-a.[name].[contenthash].css',
         chunkFilename: 'telegram-a.[name].[chunkhash].css',
-        ignoreOrder: false,
+        ignoreOrder: true,
       }),
       new EnvironmentPlugin({
         APP_ENV,
